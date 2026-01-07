@@ -8,9 +8,12 @@ const PUBLIC_ROUTES = [
   '/health',
   '/auth/login',
   '/auth/register',
+  '/auth/verify-code',
+  '/auth/resend-code',
   '/auth/verify-email',
   '/auth/resend-verification',
   '/auth/forgot-password',
+  '/auth/verify-reset-code',
   '/auth/reset-password',
   '/auth/check', // health check для status page
   '/oauth',
