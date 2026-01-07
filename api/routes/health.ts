@@ -15,6 +15,48 @@ router.get('/site', async (_req: Request, res: Response) => {
   }
 });
 
+// Check launcher download availability (GitHub releases)
+const LAUNCHER_DOWNLOAD_URLS = [
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_x64-setup.exe',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_x64_en-US.msi',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_aarch64.dmg',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_x64.dmg',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher-0.1.0-1.x86_64.rpm',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_amd64.deb',
+  'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_amd64.AppImage'
+
+];
+
+router.get('/launcher', async (_req: Request, res: Response) => {
+  const start = Date.now();
+  try {
+    // Check main download link (Windows EXE)
+    const response = await fetch(LAUNCHER_DOWNLOAD_URLS[0], { 
+      method: 'HEAD', 
+      signal: AbortSignal.timeout(10000) 
+    });
+    
+    const responseTime = Date.now() - start;
+    
+    return res.json({ 
+      status: response.ok ? 'ok' : 'error', 
+      service: 'launcher',
+      statusCode: response.status,
+      responseTime,
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    const responseTime = Date.now() - start;
+    return res.json({ 
+      status: 'error', 
+      service: 'launcher',
+      responseTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString() 
+    });
+  }
+});
+
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const sql = getDb();

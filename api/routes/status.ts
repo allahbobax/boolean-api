@@ -133,7 +133,7 @@ router.post('/check', async (_req: Request, res: Response) => {
       checkService(`${API_URL}/auth/check`),
       checkService(`${API_URL}/health`),
       checkService(`${API_URL}/health/site`),
-      checkService(`${API_URL}/versions/latest`),
+      checkService(`${API_URL}/health/launcher`),
     ]);
     
     const checks = [
