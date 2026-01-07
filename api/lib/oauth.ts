@@ -1,5 +1,5 @@
-import { getDb } from './db.js';
-import type { User } from '../types.js';
+import { getDb } from './db';
+import type { User } from '../types';
 import crypto from 'crypto';
 
 const OAUTH_USER_FIELDS = 'id, username, email, subscription, subscription_end_date, avatar, registered_at, is_admin, is_banned, email_verified, hwid, oauth_provider, oauth_id';

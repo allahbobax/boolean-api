@@ -1,4 +1,4 @@
-import type { User, MappedUser } from '../types.js';
+import type { User, MappedUser } from '../types';
 
 export function mapUserFromDb(dbUser: User): MappedUser {
   const normalizedSubscription = String(dbUser.subscription || 'free').trim().toLowerCase();

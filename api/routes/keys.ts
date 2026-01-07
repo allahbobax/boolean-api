@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDb, ensureLicenseKeysTable } from '../lib/db.js';
+import { getDb, ensureLicenseKeysTable } from '../lib/db';
 
 const router = Router();
 

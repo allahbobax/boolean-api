@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import type { User } from '../types.js';
-import { getDb } from '../lib/db.js';
-import { mapUserFromDb } from '../lib/userMapper.js';
+import type { User } from '../types';
+import { getDb } from '../lib/db';
+import { mapUserFromDb } from '../lib/userMapper';
 
 const router = Router();
 

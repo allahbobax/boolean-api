@@ -1,5 +1,5 @@
 import * as jose from 'jose';
-import type { User } from '../types.js';
+import type { User } from '../types';
 
 const encoder = new TextEncoder();
 

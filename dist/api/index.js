@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-
 // Routes
 import health from './routes/health';
 import auth from './routes/auth';
@@ -14,35 +13,30 @@ import versions from './routes/versions';
 import products from './routes/products';
 import friends from './routes/friends';
 import client from './routes/client';
-
 const app = express();
-
 // CORS configuration
 const allowedOriginPatterns = [
-  /^http:\/\/localhost(?::\d+)?$/,
-  /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
-  /^https:\/\/(?:www\.)?booleanclient\.ru$/,
-  /^https:\/\/.*\.booleanclient\.ru$/,
+    /^http:\/\/localhost(?::\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
+    /^https:\/\/(?:www\.)?booleanclient\.ru$/,
+    /^https:\/\/.*\.booleanclient\.ru$/,
 ];
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
-    callback(null, isAllowed ? origin : '*');
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400
+    origin: (origin, callback) => {
+        if (!origin)
+            return callback(null, true);
+        const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
+        callback(null, isAllowed ? origin : '*');
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400
 }));
-
 app.use(express.json());
-
 // Root endpoint
 app.get('/', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-
 // API Routes
 app.use('/health', health);
 app.use('/auth', auth);
@@ -55,16 +49,13 @@ app.use('/versions', versions);
 app.use('/products', products);
 app.use('/friends', friends);
 app.use('/client', client);
-
 // 404 handler
 app.use((_req, res) => {
-  res.status(404).json({ success: false, message: 'Not found' });
+    res.status(404).json({ success: false, message: 'Not found' });
 });
-
 // Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Server error:', err);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+app.use((err, _req, res, _next) => {
+    console.error('Server error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
 });
-
 export default app;

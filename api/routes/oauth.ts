@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { generateToken } from '../lib/jwt.js';
-import { mapOAuthUser } from '../lib/userMapper.js';
-import { findOrCreateOAuthUser, encodeState, decodeState, handleGitHub, handleGoogle, handleYandex } from '../lib/oauth.js';
+import { generateToken } from '../lib/jwt';
+import { mapOAuthUser } from '../lib/userMapper';
+import { findOrCreateOAuthUser, encodeState, decodeState, handleGitHub, handleGoogle, handleYandex } from '../lib/oauth';
 
 const router = Router();
 

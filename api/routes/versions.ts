@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import type { ClientVersion } from '../types.js';
-import { getDb, ensureVersionsTable } from '../lib/db.js';
+import type { ClientVersion } from '../types';
+import { getDb, ensureVersionsTable } from '../lib/db';
 
 const router = Router();
 

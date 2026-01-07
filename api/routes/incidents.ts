@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import type { Incident } from '../types.js';
-import { getDb, ensureIncidentsTables } from '../lib/db.js';
+import type { Incident } from '../types';
+import { getDb, ensureIncidentsTables } from '../lib/db';
 
 const router = Router();
 

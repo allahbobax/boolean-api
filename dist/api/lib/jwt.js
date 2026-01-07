@@ -1,0 +1,25 @@
+import * as jose from 'jose';
+const encoder = new TextEncoder();
+export async function generateToken(user) {
+    const secret = process.env.JWT_SECRET || 'your-jwt-secret';
+    const secretKey = encoder.encode(secret);
+    return await new jose.SignJWT({
+        id: user.id,
+        email: user.email,
+        isAdmin: user.is_admin
+    })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setExpirationTime('7d')
+        .sign(secretKey);
+}
+export async function verifyToken(token) {
+    try {
+        const secret = process.env.JWT_SECRET || 'your-jwt-secret';
+        const secretKey = encoder.encode(secret);
+        const { payload } = await jose.jwtVerify(token, secretKey);
+        return payload;
+    }
+    catch {
+        return null;
+    }
+}
