@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { warmupDb } from './lib/db';
+import { apiKeyAuth } from './lib/apiKeyAuth';
 
 // Routes
 import health from './routes/health';
@@ -44,7 +45,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   maxAge: 86400
 }));
 
@@ -52,6 +53,9 @@ app.use(cors({
 app.options('*', cors());
 
 app.use(express.json());
+
+// API Key protection for sensitive routes
+app.use(apiKeyAuth);
 
 // Root endpoint
 app.get('/', (_req, res) => {
