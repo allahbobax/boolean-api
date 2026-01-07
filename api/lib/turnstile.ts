@@ -1,0 +1,53 @@
+/**
+ * Cloudflare Turnstile server-side verification
+ */
+
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '0x4AAAAAACLHU5x_Z4-J-ixQXr1bj_4YzlY'
+const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+
+interface TurnstileVerifyResponse {
+  success: boolean
+  'error-codes'?: string[]
+  challenge_ts?: string
+  hostname?: string
+}
+
+export async function verifyTurnstileToken(token: string, remoteIp?: string): Promise<boolean> {
+  // Если секретный ключ не настроен, пропускаем проверку (для dev окружения)
+  if (!TURNSTILE_SECRET_KEY) {
+    console.warn('TURNSTILE_SECRET_KEY not configured, skipping verification')
+    return true
+  }
+
+  if (!token) {
+    return false
+  }
+
+  try {
+    const formData = new URLSearchParams()
+    formData.append('secret', TURNSTILE_SECRET_KEY)
+    formData.append('response', token)
+    if (remoteIp) {
+      formData.append('remoteip', remoteIp)
+    }
+
+    const response = await fetch(TURNSTILE_VERIFY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString(),
+    })
+
+    const data: TurnstileVerifyResponse = await response.json()
+
+    if (!data.success) {
+      console.warn('Turnstile verification failed:', data['error-codes'])
+    }
+
+    return data.success
+  } catch (error) {
+    console.error('Turnstile verification error:', error)
+    return false
+  }
+}

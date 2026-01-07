@@ -12,6 +12,7 @@ const PUBLIC_ROUTES = [
   '/auth/resend-verification',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/check', // health check для status page
   '/oauth',
   '/status',
   '/incidents', // публичный для status page

@@ -4,6 +4,7 @@ import { getDb, ensureUserSchema } from '../lib/db';
 import { hashPassword, passwordsMatch } from '../lib/password';
 import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
 import { mapUserFromDb } from '../lib/userMapper';
+import { verifyTurnstileToken } from '../lib/turnstile';
 
 const router = Router();
 
@@ -12,7 +13,14 @@ router.post('/login', async (req: Request, res: Response) => {
   const sql = getDb();
   await ensureUserSchema();
   
-  const { usernameOrEmail, password, hwid } = req.body;
+  const { usernameOrEmail, password, hwid, turnstileToken } = req.body;
+
+  // Verify Turnstile token
+  const clientIp = req.headers['x-forwarded-for'] as string || req.ip;
+  const isTurnstileValid = await verifyTurnstileToken(turnstileToken, clientIp);
+  if (!isTurnstileValid) {
+    return res.json({ success: false, message: 'Проверка безопасности не пройдена. Попробуйте снова.' });
+  }
 
   const result = await sql<User[]>`
     SELECT id, username, email, password, subscription, subscription_end_date, registered_at, 
@@ -50,7 +58,14 @@ router.post('/register', async (req: Request, res: Response) => {
   const sql = getDb();
   await ensureUserSchema();
   
-  const { username, email, password, hwid } = req.body;
+  const { username, email, password, hwid, turnstileToken } = req.body;
+
+  // Verify Turnstile token
+  const clientIp = req.headers['x-forwarded-for'] as string || req.ip;
+  const isTurnstileValid = await verifyTurnstileToken(turnstileToken, clientIp);
+  if (!isTurnstileValid) {
+    return res.json({ success: false, message: 'Проверка безопасности не пройдена. Попробуйте снова.' });
+  }
 
   const existingUser = await sql`
     SELECT * FROM users WHERE username = ${username} OR email = ${email}
