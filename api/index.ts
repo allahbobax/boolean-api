@@ -27,14 +27,24 @@ const allowedOriginPatterns = [
 
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
-    callback(null, isAllowed ? origin : '*');
+    if (isAllowed) {
+      callback(null, origin);
+    } else {
+      // Allow all origins for now to debug
+      callback(null, origin);
+    }
   },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 86400
 }));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 
