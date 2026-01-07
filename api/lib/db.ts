@@ -13,9 +13,20 @@ export function getDb() {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      prepare: false,  // Disable prepared statements for serverless (reduces cold start)
     });
   }
   return sql;
+}
+
+// Warm up connection pool - call this early in request lifecycle
+export async function warmupDb() {
+  try {
+    const db = getDb();
+    await db`SELECT 1`;
+  } catch {
+    // Ignore warmup errors
+  }
 }
 
 export async function ensureUserSchema() {

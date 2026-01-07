@@ -128,10 +128,10 @@ router.post('/check', async (_req: Request, res: Response) => {
     
     const API_URL = 'https://api.booleanclient.ru';
     
-    // Check all services
+    // Check all services using lightweight ping endpoints
     const [authStatus, apiStatus, siteStatus, launcherStatus] = await Promise.all([
       checkService(`${API_URL}/auth/check`),
-      checkService(`${API_URL}/health`),
+      checkService(`${API_URL}/health/ping`),  // Use lightweight ping instead of heavy /health
       checkService(`${API_URL}/health/site`),
       checkService(`${API_URL}/health/launcher`),
     ]);

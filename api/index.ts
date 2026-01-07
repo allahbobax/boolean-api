@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { warmupDb } from './lib/db';
 
 // Routes
 import health from './routes/health';
@@ -17,6 +18,9 @@ import client from './routes/client';
 import status from './routes/status';
 
 const app = express();
+
+// Warm up DB connection early (non-blocking)
+warmupDb();
 
 // CORS configuration
 const allowedOriginPatterns = [
