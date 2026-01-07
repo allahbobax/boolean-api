@@ -5,11 +5,12 @@ import { hashPassword, passwordsMatch } from '../lib/password';
 import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
 import { mapUserFromDb } from '../lib/userMapper';
 import { verifyTurnstileToken } from '../lib/turnstile';
+import { authLimiter, registerLimiter, emailLimiter, forgotPasswordLimiter, verifyCodeLimiter } from '../lib/rateLimit';
 
 const router = Router();
 
 // Login
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   await ensureUserSchema();
   
@@ -54,7 +55,7 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // Register
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   await ensureUserSchema();
   
@@ -108,7 +109,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // Resend code
-router.post('/resend-code', async (req: Request, res: Response) => {
+router.post('/resend-code', emailLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   const { userId } = req.body;
 
@@ -144,7 +145,7 @@ router.post('/resend-code', async (req: Request, res: Response) => {
 });
 
 // Verify code
-router.post('/verify-code', async (req: Request, res: Response) => {
+router.post('/verify-code', verifyCodeLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   const { userId, code } = req.body;
 
@@ -176,7 +177,7 @@ router.post('/verify-code', async (req: Request, res: Response) => {
 });
 
 // Forgot password
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   await ensureUserSchema();
   
@@ -209,7 +210,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 });
 
 // Verify reset code
-router.post('/verify-reset-code', async (req: Request, res: Response) => {
+router.post('/verify-reset-code', verifyCodeLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   const { userId, code } = req.body;
 
@@ -241,7 +242,7 @@ router.post('/verify-reset-code', async (req: Request, res: Response) => {
 });
 
 // Reset password
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', verifyCodeLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
   const { userId, code, newPassword } = req.body;
 

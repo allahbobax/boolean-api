@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { warmupDb } from './lib/db';
 import { apiKeyAuth } from './lib/apiKeyAuth';
+import { generalLimiter } from './lib/rateLimit';
 
 // Routes
 import health from './routes/health';
@@ -39,8 +40,8 @@ app.use(cors({
     if (isAllowed) {
       callback(null, origin);
     } else {
-      // Allow all origins for now to debug
-      callback(null, origin);
+      // Reject unknown origins in production
+      callback(new Error('CORS not allowed'), false);
     }
   },
   credentials: true,
@@ -53,6 +54,9 @@ app.use(cors({
 app.options('*', cors());
 
 app.use(express.json());
+
+// Global rate limiting
+app.use(generalLimiter);
 
 // API Key protection for sensitive routes
 app.use(apiKeyAuth);
