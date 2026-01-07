@@ -77,10 +77,11 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 
   // Фильтруем только разрешённые поля (защита от SQL injection)
-  const safeUpdates: Record<string, unknown> = {};
+  const safeUpdates: Record<string, string | number | boolean | null> = {};
   for (const [key, value] of Object.entries(updates)) {
     if (ALLOWED_UPDATE_FIELDS[key]) {
-      safeUpdates[key] = key === 'settings' ? JSON.stringify(value) : value;
+      const processedValue = key === 'settings' ? JSON.stringify(value) : value;
+      safeUpdates[key] = processedValue as string | number | boolean | null;
     }
   }
 
@@ -93,8 +94,8 @@ router.patch('/:id', async (req: Request, res: Response) => {
   try {
     for (const [key, value] of Object.entries(safeUpdates)) {
       const dbField = ALLOWED_UPDATE_FIELDS[key];
-      // Используем параметризованный запрос для каждого поля
-      await sql`UPDATE users SET ${sql(dbField)} = ${value} WHERE id = ${id}`;
+      // Используем sql.unsafe для имени колонки (безопасно, т.к. dbField из whitelist)
+      await sql.unsafe(`UPDATE users SET ${dbField} = $1 WHERE id = $2`, [value, id]);
     }
 
     const result = await sql<User[]>`
