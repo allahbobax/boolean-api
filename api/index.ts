@@ -14,6 +14,7 @@ import versions from './routes/versions';
 import products from './routes/products';
 import friends from './routes/friends';
 import client from './routes/client';
+import status from './routes/status';
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/versions', versions);
 app.use('/products', products);
 app.use('/friends', friends);
 app.use('/client', client);
+app.use('/status', status);
 
 // 404 handler
 app.use((_req, res) => {
