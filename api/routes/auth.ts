@@ -267,8 +267,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 router.get('/check', async (_req: Request, res: Response) => {
   try {
     const sql = getDb();
-    await ensureUserSchema();
-    
+    // Простой пинг БД без тяжёлых операций миграции
     await sql`SELECT 1`;
     
     return res.json({ 
