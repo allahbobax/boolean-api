@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "vercel dev",
-    "build": "tsc",
-    "start": "node api/index.js"
+    "build": "echo 'Vercel handles TypeScript compilation'",
+    "start": "node dist/api/index.js"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.7",
