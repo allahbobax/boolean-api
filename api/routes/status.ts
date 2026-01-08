@@ -44,13 +44,13 @@ async function checkService(url: string): Promise<{ status: string; responseTime
   try {
     const response = await fetch(url, { 
       method: 'GET', 
-      signal: AbortSignal.timeout(5000) // Reduced from 10s to 5s
+      signal: AbortSignal.timeout(3000) // Reduced to 3s for faster checks
     });
     const responseTime = Date.now() - start;
     
     if (response.ok) {
       return { 
-        status: responseTime > 3000 ? 'degraded' : 'operational', // Увеличен порог для serverless cold start
+        status: responseTime > 2000 ? 'degraded' : 'operational',
         responseTime 
       };
     }
