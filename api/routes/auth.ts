@@ -177,7 +177,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 
   const result = await sql<User[]>`
     INSERT INTO users (username, email, password, verification_code, verification_code_expires, email_verified, hwid) 
-    VALUES (${username}, ${email}, ${hashedPassword}, ${verificationCode}, ${codeExpires}, false, ${hwid}) 
+    VALUES (${username}, ${email}, ${hashedPassword}, ${verificationCode}, ${codeExpires}, false, ${hwid || null}) 
     RETURNING id, username, email, subscription, subscription_end_date, registered_at, is_admin, is_banned, email_verified, settings, avatar, hwid
   `;
 
