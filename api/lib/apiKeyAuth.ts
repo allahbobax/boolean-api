@@ -39,7 +39,8 @@ const PUBLIC_ROUTES = [
   '/auth/check', // health check для status page
   '/oauth',
   '/status',
-  '/incidents', // публичный для status page
+  '/incidents/active', // только активные инциденты публичны для status page
+  '/incidents', // GET запросы к списку инцидентов (только чтение)
 ];
 
 // Роуты которые требуют только авторизацию пользователя (JWT), но не API ключ
@@ -52,12 +53,35 @@ const USER_AUTH_ROUTES = [
 
 export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   const path = req.path;
+  const method = req.method;
   
   // Логируем для отладки
-  console.log(`[apiKeyAuth] Path: ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
+  console.log(`[apiKeyAuth] ${method} ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
   
-  // Пропускаем публичные роуты
-  if (PUBLIC_ROUTES.some(route => path.startsWith(route))) {
+  // Специальная обработка для /incidents - только GET запросы публичны
+  if (path.startsWith('/incidents')) {
+    if (method === 'GET') {
+      // GET /incidents и GET /incidents/active публичны для status page
+      return next();
+    }
+    // POST, PUT, DELETE требуют API ключ
+    // Продолжаем проверку ниже
+  }
+  
+  // Пропускаем публичные роуты (точное совпадение или startsWith для вложенных)
+  const isPublicRoute = PUBLIC_ROUTES.some(route => {
+    // Точное совпадение
+    if (path === route) return true;
+    // Для роутов с подпутями (например /auth/login)
+    if (route.includes('/') && path.startsWith(route)) {
+      // Проверяем что это не случайное совпадение (например /user не должен матчить /users)
+      const nextChar = path[route.length];
+      return !nextChar || nextChar === '/' || nextChar === '?';
+    }
+    return false;
+  });
+  
+  if (isPublicRoute) {
     return next();
   }
   
@@ -78,7 +102,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   }
   
   if (!apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
-    console.log(`[apiKeyAuth] Access denied for path: ${path}`);
+    console.log(`[apiKeyAuth] Access denied for ${method} ${path}`);
     return res.status(403).json({ 
       success: false, 
       message: 'Access denied' 
