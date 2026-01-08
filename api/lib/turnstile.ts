@@ -43,7 +43,7 @@ export async function verifyTurnstileToken(token: string, remoteIp?: string): Pr
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
-    }, 5000)
+    }, 3000) // Уменьшен таймаут с 5s до 3s
 
     const data: TurnstileVerifyResponse = await response.json()
 

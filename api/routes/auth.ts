@@ -33,12 +33,12 @@ function validatePassword(password: string): { valid: boolean; message?: string 
 // Login
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
-  // УБРАНО: ensureUserSchema() - схема должна создаваться при деплое, не на каждый запрос
   
   const { usernameOrEmail, password, hwid, turnstileToken } = req.body;
   const clientIp = req.headers['x-forwarded-for'] as string || req.ip;
 
   // ОПТИМИЗАЦИЯ: Запускаем Turnstile и DB запрос ПАРАЛЛЕЛЬНО
+  // Используем только нужные поля для ускорения запроса
   const [isTurnstileValid, result] = await Promise.all([
     verifyTurnstileToken(turnstileToken, clientIp),
     sql<User[]>`
@@ -116,23 +116,27 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     return res.json({ success: false, message: 'Ваш аккаунт заблокирован' });
   }
 
-  // БЕЗОПАСНОСТЬ: Сбрасываем счетчик при успешном входе
-  await sql`
+  // ОПТИМИЗАЦИЯ: Отправляем ответ СРАЗУ, обновляем БД в фоне
+  if (hwid) {
+    dbUser.hwid = hwid;
+  }
+
+  const userData = mapUserFromDb(dbUser);
+  
+  // Отправляем ответ немедленно - пользователь не ждёт UPDATE
+  res.json({ success: true, message: 'Вход выполнен!', data: userData });
+
+  // БЕЗОПАСНОСТЬ: Сбрасываем счетчик при успешном входе (в фоне, не блокируя ответ)
+  sql`
     UPDATE users 
     SET failed_login_attempts = 0, 
         account_locked_until = NULL,
         last_failed_login = NULL,
         hwid = ${hwid || dbUser.hwid}
     WHERE id = ${dbUser.id}
-  `;
-
-  if (hwid) {
-    dbUser.hwid = hwid;
-  }
+  `.catch(err => logger.error('Failed to reset login attempts', { userId: dbUser.id, error: err.message }));
 
   logger.info('Successful login', { userId: dbUser.id, ip: clientIp });
-
-  return res.json({ success: true, message: 'Вход выполнен!', data: mapUserFromDb(dbUser) });
 });
 
 // Register
@@ -375,26 +379,14 @@ router.post('/reset-password', verifyCodeLimiter, async (req: Request, res: Resp
 });
 
 // Health check endpoint for auth service
-router.get('/check', async (_req: Request, res: Response) => {
-  try {
-    const sql = getDb();
-    // Простой пинг БД без тяжёлых операций миграции
-    await sql`SELECT 1`;
-    
-    return res.json({ 
-      status: 'ok', 
-      service: 'auth',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Auth health check failed');
-    return res.status(500).json({ 
-      status: 'error', 
-      service: 'auth',
-      timestamp: new Date().toISOString(),
-      error: 'Database connection issue'
-    });
-  }
+// ОПТИМИЗАЦИЯ: Убрали DB запрос - проверяем только что сервис отвечает
+// DB проверяется через /health/ping, дублировать не нужно
+router.get('/check', (_req: Request, res: Response) => {
+  return res.json({ 
+    status: 'ok', 
+    service: 'auth',
+    timestamp: new Date().toISOString()
+  });
 });
 
 export default router;

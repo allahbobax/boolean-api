@@ -50,7 +50,7 @@ async function checkService(url: string): Promise<{ status: string; responseTime
     
     if (response.ok) {
       return { 
-        status: responseTime > 2000 ? 'degraded' : 'operational', 
+        status: responseTime > 3000 ? 'degraded' : 'operational', // Увеличен порог для serverless cold start
         responseTime 
       };
     }
