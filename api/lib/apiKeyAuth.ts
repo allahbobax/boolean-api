@@ -68,20 +68,14 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     // Продолжаем проверку ниже
   }
   
-  // Пропускаем публичные роуты (точное совпадение или startsWith для вложенных)
+  // Пропускаем публичные роуты (точное совпадение)
   const isPublicRoute = PUBLIC_ROUTES.some(route => {
-    // Точное совпадение
-    if (path === route) return true;
-    // Для роутов с подпутями (например /auth/login)
-    if (route.includes('/') && path.startsWith(route)) {
-      // Проверяем что это не случайное совпадение (например /user не должен матчить /users)
-      const nextChar = path[route.length];
-      return !nextChar || nextChar === '/' || nextChar === '?';
-    }
-    return false;
+    // Точное совпадение пути
+    return path === route;
   });
   
   if (isPublicRoute) {
+    console.log(`[apiKeyAuth] Public route allowed: ${method} ${path}`);
     return next();
   }
   

@@ -2,7 +2,15 @@ import { Resend } from 'resend';
 import crypto from 'crypto';
 import { logger } from './logger';
 
-const resend = new Resend('re_UymLriaL_9mVm5gLZGdebr1rENH37Agcx');
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+if (!RESEND_API_KEY) {
+  logger.error('RESEND_API_KEY not configured in environment');
+}
+
+// Для EU региона нужно установить переменную окружения RESEND_BASE_URL
+// или использовать API ключ, который автоматически определяет регион
+const resend = new Resend(RESEND_API_KEY || 're_UymLriaL_9mVm5gLZGdebr1rENH37Agcx');
 
 export function generateVerificationCode(): string {
   // Криптографически стойкая генерация 6-значного кода
@@ -10,19 +18,36 @@ export function generateVerificationCode(): string {
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@booleanclient.ru';
+  
   try {
-    const fromEmail = 'noreply@booleanclient.ru';
+    if (!RESEND_API_KEY) {
+      logger.error('RESEND_API_KEY is not set');
+      return false;
+    }
     
-    await resend.emails.send({
+    logger.info('Attempting to send email', { from: fromEmail, to, subject });
+    
+    const result = await resend.emails.send({
       from: fromEmail,
       to,
       subject,
       html,
     });
     
+    logger.info('Email sent successfully', { to, subject, id: result.data?.id });
     return true;
-  } catch (error) {
-    logger.error('Email sending failed', { subject, error: error instanceof Error ? error.message : 'Unknown error' });
+  } catch (error: any) {
+    logger.error('Email sending failed', { 
+      subject, 
+      to,
+      from: fromEmail,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      statusCode: error?.statusCode,
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack
+    });
     return false;
   }
 }
