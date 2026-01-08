@@ -3,11 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import crypto from 'crypto';
 import { warmupDb } from './lib/db';
 import { apiKeyAuth } from './lib/apiKeyAuth';
 import { generalLimiter } from './lib/rateLimit';
-import { generateCsrfToken, csrfProtection } from './lib/csrf';
 import { logger } from './lib/logger';
 
 // Routes
@@ -88,7 +86,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-CSRF-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   maxAge: 86400
 }));
 
@@ -124,24 +122,7 @@ app.use(helmet({
 // Global rate limiting
 app.use(generalLimiter);
 
-// CSRF token endpoint (must be before csrfProtection middleware)
-// Rate limited to prevent token flooding attacks
-app.get('/csrf-token', generalLimiter, async (req, res) => {
-  const sessionId = req.cookies?.sessionId || crypto.randomUUID();
-  const csrfToken = await generateCsrfToken(sessionId);
-  
-  // Set session cookie
-  res.cookie('sessionId', sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 3600000 // 1 hour
-  });
-  
-  res.json({ csrfToken });
-});
-
-// API Key protection for sensitive routes (must be before CSRF)
+// API Key protection for all routes
 app.use(apiKeyAuth);
 
 // Root endpoint
@@ -151,16 +132,16 @@ app.get('/', (_req, res) => {
 
 // API Routes
 app.use('/health', health);
-app.use('/auth', csrfProtection, auth);
+app.use('/auth', auth);
 app.use('/oauth', oauth);
-app.use('/users', csrfProtection, users);
-app.use('/hwid', csrfProtection, hwid);
-app.use('/keys', csrfProtection, keys);
-app.use('/incidents', csrfProtection, incidents);
-app.use('/versions', csrfProtection, versions);
-app.use('/products', csrfProtection, products);
-app.use('/friends', csrfProtection, friends);
-app.use('/client', csrfProtection, client);
+app.use('/users', users);
+app.use('/hwid', hwid);
+app.use('/keys', keys);
+app.use('/incidents', incidents);
+app.use('/versions', versions);
+app.use('/products', products);
+app.use('/friends', friends);
+app.use('/client', client);
 app.use('/status', status);
 
 // 404 handler
