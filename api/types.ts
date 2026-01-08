@@ -18,6 +18,9 @@ export interface User {
   verification_code_expires?: string | null;
   reset_code?: string | null;
   reset_code_expires?: string | null;
+  failed_login_attempts?: number | null;
+  account_locked_until?: string | null;
+  last_failed_login?: string | null;
 }
 
 export interface MappedUser {
