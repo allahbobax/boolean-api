@@ -12,11 +12,20 @@ const router = Router();
 
 // Валидация надежности пароля
 function validatePassword(password: string): { valid: boolean; message?: string } {
-  if (password.length < 6) {
-    return { valid: false, message: 'Пароль должен быть минимум 6 символов' };
+  if (password.length < 12) {
+    return { valid: false, message: 'Пароль должен быть минимум 12 символов' };
   }
-  if (password.length > 19) {
-    return { valid: false, message: 'Пароль должен быть максимум 19 символов' };
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать заглавную букву' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать строчную букву' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать цифру' };
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать спецсимвол' };
   }
   return { valid: true };
 }
@@ -45,7 +54,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   `;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверные учетные данные' });
+    return res.json({ success: false, message: 'Неверный логин или пароль' });
   }
 
   const dbUser = result[0];
@@ -97,7 +106,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     const attemptsLeft = 5 - failedAttempts;
     return res.json({ 
       success: false, 
-      message: `Неверные учетные данные. Осталось попыток: ${attemptsLeft}` 
+      message: `Неверный логин или пароль. Осталось попыток: ${attemptsLeft}` 
     });
   }
 
@@ -151,11 +160,11 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
   if (existingUser.length > 0) {
     const existing = existingUser[0];
     if (existing.username === username) {
-      return res.json({ success: false, message: 'Это имя пользователя недоступно' });
+      return res.json({ success: false, message: 'Пользователь с таким логином уже существует' });
     }
     if (existing.email === email) {
       // Не раскрываем, что email существует - возвращаем общее сообщение
-      return res.json({ success: true, message: 'Если данные корректны, код подтверждения будет отправлен на email' });
+      return res.json({ success: true, message: 'Если email доступен, код подтверждения будет отправлен' });
     }
   }
 
@@ -179,7 +188,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 
   return res.json({
     success: true,
-    message: 'Если данные корректны, код подтверждения будет отправлен на email',
+    message: 'Код подтверждения отправлен на email',
     requiresVerification: true,
     data: user
   });
@@ -197,7 +206,7 @@ router.post('/resend-code', emailLimiter, async (req: Request, res: Response) =>
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверные данные запроса' });
+    return res.json({ success: false, message: 'Пользователь не найден' });
   }
 
   const user = result[0];
@@ -216,9 +225,9 @@ router.post('/resend-code', emailLimiter, async (req: Request, res: Response) =>
   const emailSent = await sendVerificationEmail(user.email, user.username, verificationCode);
 
   if (emailSent) {
-    return res.json({ success: true, message: 'Если данные корректны, новый код отправлен на email' });
+    return res.json({ success: true, message: 'Новый код отправлен на email' });
   }
-  return res.json({ success: false, message: 'Ошибка отправки. Попробуйте позже' });
+  return res.json({ success: false, message: 'Ошибка отправки кода' });
 });
 
 // Verify code
@@ -233,17 +242,17 @@ router.post('/verify-code', verifyCodeLimiter, async (req: Request, res: Respons
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверные данные запроса' });
+    return res.json({ success: false, message: 'Пользователь не найден' });
   }
 
   const user = result[0];
 
   if (new Date() > new Date(user.verification_code_expires!)) {
-    return res.json({ success: false, message: 'Код истек. Запросите новый код' });
+    return res.json({ success: false, message: 'Код истек. Запросите новый код.' });
   }
 
   if (user.verification_code !== code) {
-    return res.json({ success: false, message: 'Неверный код' });
+    return res.json({ success: false, message: 'Неверный код подтверждения' });
   }
 
   await sql`
@@ -300,17 +309,17 @@ router.post('/verify-reset-code', verifyCodeLimiter, async (req: Request, res: R
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверные данные запроса' });
+    return res.json({ success: false, message: 'Пользователь не найден' });
   }
 
   const user = result[0];
 
   if (!user.reset_code || !user.reset_code_expires) {
-    return res.json({ success: false, message: 'Неверные данные запроса' });
+    return res.json({ success: false, message: 'Код сброса не запрашивался' });
   }
 
   if (new Date() > new Date(user.reset_code_expires)) {
-    return res.json({ success: false, message: 'Код истек. Запросите новый код' });
+    return res.json({ success: false, message: 'Код истек. Запросите новый код.' });
   }
 
   if (user.reset_code !== code) {
@@ -338,13 +347,13 @@ router.post('/reset-password', verifyCodeLimiter, async (req: Request, res: Resp
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверные данные запроса' });
+    return res.json({ success: false, message: 'Пользователь не найден' });
   }
 
   const user = result[0];
 
   if (!user.reset_code || user.reset_code !== code) {
-    return res.json({ success: false, message: 'Неверный код' });
+    return res.json({ success: false, message: 'Неверный код подтверждения' });
   }
 
   if (new Date() > new Date(user.reset_code_expires!)) {
