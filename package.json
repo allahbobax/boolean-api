@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "vercel dev",
     "build": "echo 'Vercel handles TypeScript compilation'",
-    "start": "node dist/api/index.js"
+    "start": "node dist/api/index.js",
+    "script:delete-users": "tsx scripts/delete-all-users.ts",
+    "script:delete-keys": "tsx scripts/delete-all-keys.ts",
+    "script:clear-rate-limits": "tsx scripts/clear-rate-limits.ts",
+    "script:clear-account-locks": "tsx scripts/clear-account-locks.ts"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.7",
@@ -31,6 +35,7 @@
     "@types/node": "^20.12.0",
     "@types/validator": "^13.11.7",
     "@vercel/node": "^3.0.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.4.5",
     "vercel": "^37.0.0"
   },

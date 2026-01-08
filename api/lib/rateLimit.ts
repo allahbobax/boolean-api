@@ -90,24 +90,24 @@ function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: strin
 
 // Предустановленные лимитеры для разных эндпоинтов
 
-// Аутентификация - 5 попыток за 15 минут
-const authRateLimiter = createUpstashLimiter(5, 15 * 60);
+// Аутентификация - 5 попыток за 40 секунд
+const authRateLimiter = createUpstashLimiter(5, 40);
 export const authLimiter = createRateLimitMiddleware(authRateLimiter, 'auth');
 
-// Регистрация - 3 попытки за 1 час
-const registerRateLimiter = createUpstashLimiter(3, 60 * 60);
+// Регистрация - 3 попытки за 40 секунд
+const registerRateLimiter = createUpstashLimiter(3, 40);
 export const registerLimiter = createRateLimitMiddleware(registerRateLimiter, 'register');
 
-// Email отправка - 1 письмо в минуту
-const emailRateLimiter = createUpstashLimiter(1, 60);
+// Email отправка - 1 письмо за 40 секунд
+const emailRateLimiter = createUpstashLimiter(1, 40);
 export const emailLimiter = createRateLimitMiddleware(emailRateLimiter, 'email');
 
-// Забыли пароль - 3 запроса за 1 час
-const forgotPasswordRateLimiter = createUpstashLimiter(3, 60 * 60);
+// Забыли пароль - 3 запроса за 40 секунд
+const forgotPasswordRateLimiter = createUpstashLimiter(3, 40);
 export const forgotPasswordLimiter = createRateLimitMiddleware(forgotPasswordRateLimiter, 'forgot');
 
-// Проверка кода - 10 попыток за 15 минут
-const verifyCodeRateLimiter = createUpstashLimiter(10, 15 * 60);
+// Проверка кода - 10 попыток за 40 секунд
+const verifyCodeRateLimiter = createUpstashLimiter(10, 40);
 export const verifyCodeLimiter = createRateLimitMiddleware(verifyCodeRateLimiter, 'verify');
 
 // Общий лимит - 100 запросов в минуту
