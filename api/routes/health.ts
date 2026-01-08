@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDb, ensureKeysTable } from '../lib/db';
+import { getDb } from '../lib/db';
 
 const router = Router();
 
@@ -8,10 +8,11 @@ router.get('/site', async (_req: Request, res: Response) => {
   try {
     const response = await fetch('https://booleanclient.ru', { method: 'GET', signal: AbortSignal.timeout(10000) });
     const responseTime = Date.now() - start;
-    return res.json({ status: response.ok ? 'ok' : 'error', statusCode: response.status, responseTime, timestamp: new Date().toISOString() });
+    const isOk = response.ok;
+    return res.status(isOk ? 200 : 503).json({ status: isOk ? 'ok' : 'error', statusCode: response.status, responseTime, timestamp: new Date().toISOString() });
   } catch (error) {
     const responseTime = Date.now() - start;
-    return res.json({ status: 'error', statusCode: 0, responseTime, timestamp: new Date().toISOString(), error: error instanceof Error ? error.message : 'Unknown error' });
+    return res.status(503).json({ status: 'error', statusCode: 0, responseTime, timestamp: new Date().toISOString(), error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -31,15 +32,19 @@ router.get('/launcher', async (_req: Request, res: Response) => {
   const start = Date.now();
   try {
     // Check main download link (Windows EXE)
+    // GitHub releases redirect, so we follow redirects and check final response
     const response = await fetch(LAUNCHER_DOWNLOAD_URLS[0], { 
       method: 'HEAD', 
-      signal: AbortSignal.timeout(10000) 
+      signal: AbortSignal.timeout(10000),
+      redirect: 'follow'
     });
     
     const responseTime = Date.now() - start;
+    // Consider 200-399 as success (includes redirects that were followed)
+    const isOk = response.status >= 200 && response.status < 400;
     
-    return res.json({ 
-      status: response.ok ? 'ok' : 'error', 
+    return res.status(isOk ? 200 : 503).json({ 
+      status: isOk ? 'ok' : 'error', 
       service: 'launcher',
       statusCode: response.status,
       responseTime,
@@ -47,7 +52,7 @@ router.get('/launcher', async (_req: Request, res: Response) => {
     });
   } catch (error) {
     const responseTime = Date.now() - start;
-    return res.json({ 
+    return res.status(503).json({ 
       status: 'error', 
       service: 'launcher',
       responseTime,
