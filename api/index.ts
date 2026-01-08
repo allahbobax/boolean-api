@@ -73,24 +73,22 @@ const allowedOriginPatterns = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Only allow requests without origin in development mode
+    // Allow requests without origin (direct browser access, curl, etc.)
     if (!origin) {
-      if (process.env.NODE_ENV === 'development') {
-        return callback(null, true);
-      }
-      return callback(new Error('Origin required'), false);
+      return callback(null, true);
     }
     const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
     if (isAllowed) {
       callback(null, origin);
     } else {
-      // Reject unknown origins in production
+      // Log rejected origins for debugging
+      logger.warn('CORS rejected', { origin });
       callback(new Error('CORS not allowed'), false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-CSRF-Token'],
   maxAge: 86400
 }));
 
