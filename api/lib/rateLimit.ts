@@ -1,33 +1,17 @@
 /**
- * In-memory rate limiting middleware
- * Для production рекомендуется использовать Redis
+ * Rate limiting middleware using Upstash Redis
+ * Работает в serverless окружении (Vercel)
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
-interface RateLimitEntry {
-  count: number;
-  resetTime: number;
-}
-
-// In-memory store (для Vercel serverless используйте Redis/Upstash)
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-// Очистка старых записей каждые 5 минут
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (entry.resetTime < now) {
-      rateLimitStore.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
-
-interface RateLimitOptions {
-  windowMs: number;      // Окно времени в мс
-  maxRequests: number;   // Макс запросов за окно
-  keyPrefix?: string;    // Префикс для ключа
-}
+// Инициализация Redis клиента
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -37,79 +21,72 @@ function getClientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
-export function createRateLimiter(options: RateLimitOptions) {
-  const { windowMs, maxRequests, keyPrefix = 'rl' } = options;
+// Создание rate limiter с Upstash
+function createUpstashLimiter(requests: number, windowSeconds: number) {
+  return new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(requests, `${windowSeconds} s`),
+    analytics: true,
+    prefix: 'ratelimit',
+  });
+}
 
-  return (req: Request, res: Response, next: NextFunction) => {
-    const ip = getClientIp(req);
-    const key = `${keyPrefix}:${ip}`;
-    const now = Date.now();
+// Middleware для применения rate limiting
+function createRateLimitMiddleware(limiter: Ratelimit, identifier?: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ip = getClientIp(req);
+      const key = identifier ? `${identifier}:${ip}` : ip;
+      
+      const { success, limit, remaining, reset } = await limiter.limit(key);
 
-    let entry = rateLimitStore.get(key);
+      // Устанавливаем заголовки
+      res.set('X-RateLimit-Limit', String(limit));
+      res.set('X-RateLimit-Remaining', String(remaining));
+      res.set('X-RateLimit-Reset', String(reset));
 
-    if (!entry || entry.resetTime < now) {
-      entry = { count: 1, resetTime: now + windowMs };
-      rateLimitStore.set(key, entry);
+      if (!success) {
+        const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+        res.set('Retry-After', String(retryAfter));
+        
+        return res.status(429).json({
+          success: false,
+          message: 'Слишком много запросов. Попробуйте позже.',
+          retryAfter
+        });
+      }
+
+      return next();
+    } catch (error) {
+      console.error('Rate limit error:', error);
+      // В случае ошибки Redis пропускаем запрос (fail-open)
       return next();
     }
-
-    entry.count++;
-
-    if (entry.count > maxRequests) {
-      const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-      res.set('Retry-After', String(retryAfter));
-      res.set('X-RateLimit-Limit', String(maxRequests));
-      res.set('X-RateLimit-Remaining', '0');
-      res.set('X-RateLimit-Reset', String(entry.resetTime));
-      
-      return res.status(429).json({
-        success: false,
-        message: 'Слишком много запросов. Попробуйте позже.',
-        retryAfter
-      });
-    }
-
-    res.set('X-RateLimit-Limit', String(maxRequests));
-    res.set('X-RateLimit-Remaining', String(maxRequests - entry.count));
-    res.set('X-RateLimit-Reset', String(entry.resetTime));
-
-    return next();
   };
 }
 
-// Предустановленные лимитеры
-export const authLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,  // 15 минут
-  maxRequests: 5,             // 5 попыток логина
-  keyPrefix: 'auth'
-});
+// Предустановленные лимитеры для разных эндпоинтов
 
-export const registerLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000,  // 1 час
-  maxRequests: 3,             // 3 регистрации
-  keyPrefix: 'register'
-});
+// Аутентификация - 5 попыток за 15 минут
+const authRateLimiter = createUpstashLimiter(5, 15 * 60);
+export const authLimiter = createRateLimitMiddleware(authRateLimiter, 'auth');
 
-export const emailLimiter = createRateLimiter({
-  windowMs: 60 * 1000,       // 1 минута
-  maxRequests: 1,             // 1 письмо в минуту
-  keyPrefix: 'email'
-});
+// Регистрация - 3 попытки за 1 час
+const registerRateLimiter = createUpstashLimiter(3, 60 * 60);
+export const registerLimiter = createRateLimitMiddleware(registerRateLimiter, 'register');
 
-export const forgotPasswordLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000,  // 1 час
-  maxRequests: 3,             // 3 запроса сброса
-  keyPrefix: 'forgot'
-});
+// Email отправка - 1 письмо в минуту
+const emailRateLimiter = createUpstashLimiter(1, 60);
+export const emailLimiter = createRateLimitMiddleware(emailRateLimiter, 'email');
 
-export const verifyCodeLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,  // 15 минут
-  maxRequests: 10,            // 10 попыток ввода кода
-  keyPrefix: 'verify'
-});
+// Забыли пароль - 3 запроса за 1 час
+const forgotPasswordRateLimiter = createUpstashLimiter(3, 60 * 60);
+export const forgotPasswordLimiter = createRateLimitMiddleware(forgotPasswordRateLimiter, 'forgot');
 
-export const generalLimiter = createRateLimiter({
-  windowMs: 60 * 1000,       // 1 минута
-  maxRequests: 100,           // 100 запросов
-  keyPrefix: 'general'
-});
+// Проверка кода - 10 попыток за 15 минут
+const verifyCodeRateLimiter = createUpstashLimiter(10, 15 * 60);
+export const verifyCodeLimiter = createRateLimitMiddleware(verifyCodeRateLimiter, 'verify');
+
+// Общий лимит - 100 запросов в минуту
+const generalRateLimiter = createUpstashLimiter(100, 60);
+export const generalLimiter = createRateLimitMiddleware(generalRateLimiter, 'general');

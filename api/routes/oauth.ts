@@ -2,8 +2,17 @@ import { Router, Request, Response } from 'express';
 import { generateToken } from '../lib/jwt';
 import { mapOAuthUser } from '../lib/userMapper';
 import { findOrCreateOAuthUser, encodeState, decodeState, handleGitHub, handleGoogle, handleYandex } from '../lib/oauth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+
+// БЕЗОПАСНОСТЬ: Проверка настройки OAuth провайдеров
+const isOAuthConfigured = () => {
+  const hasGithub = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+  const hasGoogle = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const hasYandex = !!(process.env.YANDEX_CLIENT_ID && process.env.YANDEX_CLIENT_SECRET);
+  return { hasGithub, hasGoogle, hasYandex };
+};
 
 // OAuth redirect
 router.get('/:provider', async (req: Request, res: Response) => {
@@ -13,6 +22,18 @@ router.get('/:provider', async (req: Request, res: Response) => {
   
   if (!['github', 'google', 'yandex'].includes(provider)) {
     return res.status(400).json({ success: false, message: 'Invalid provider' });
+  }
+
+  // БЕЗОПАСНОСТЬ: Проверяем настройку провайдера
+  const config = isOAuthConfigured();
+  if (provider === 'github' && !config.hasGithub) {
+    return res.status(503).json({ success: false, message: 'GitHub OAuth не настроен' });
+  }
+  if (provider === 'google' && !config.hasGoogle) {
+    return res.status(503).json({ success: false, message: 'Google OAuth не настроен' });
+  }
+  if (provider === 'yandex' && !config.hasYandex) {
+    return res.status(503).json({ success: false, message: 'Yandex OAuth не настроен' });
   }
 
   const frontendUrl = process.env.FRONTEND_URL || 'https://booleanclient.ru';
@@ -92,7 +113,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
 
     return res.redirect(`${frontendUrl}/auth?auth=success&user=${encodedUser}`);
   } catch (err) {
-    console.error(`${provider} OAuth error:`, err);
+    logger.error('OAuth callback failed', { provider, ip: req.ip });
 
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
@@ -142,7 +163,7 @@ router.get('/:provider/exchange', async (req: Request, res: Response) => {
 
     return res.redirect(`http://127.0.0.1:3000/callback?user=${encodedUser}`);
   } catch (err) {
-    console.error(`${provider} OAuth exchange error:`, err);
+    logger.error('OAuth exchange failed', { provider, ip: req.ip });
     return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
   }
 });

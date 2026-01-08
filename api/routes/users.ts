@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { User } from '../types';
 import { getDb } from '../lib/db';
 import { mapUserFromDb } from '../lib/userMapper';
+import validator from 'validator';
 
 const router = Router();
 
@@ -65,15 +66,49 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 
+// Функции валидации
+function validateUserId(id: string): boolean {
+  // Проверяем, что это положительное целое число в разумных пределах
+  const numId = parseInt(id, 10);
+  return Number.isInteger(numId) && numId > 0 && numId <= 2147483647; // MAX_INT32
+}
+
+function validateEmail(email: string): boolean {
+  return validator.isEmail(email) && email.length <= 254; // RFC 5321 limit
+}
+
+function validateUsername(username: string): boolean {
+  // Только буквы, цифры, подчеркивания и дефисы, длина 3-30 символов
+  return /^[a-zA-Z0-9_-]{3,30}$/.test(username);
+}
+
 // Update user
 router.patch('/:id', async (req: Request, res: Response) => {
   const sql = getDb();
   const id = req.params.id;
   const updates = req.body;
 
-  // Валидация ID
-  if (!/^\d+$/.test(id)) {
-    return res.json({ success: false, message: 'Неверный ID пользователя' });
+  // Усиленная валидация ID
+  if (!validateUserId(id)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Неверный формат ID пользователя' 
+    });
+  }
+
+  // Валидация входных данных
+  if (updates.email && !validateEmail(updates.email)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Неверный формат email адреса' 
+    });
+  }
+
+  if (updates.username && !validateUsername(updates.username)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Username должен содержать только буквы, цифры, _ и -, длина 3-30 символов' 
+    });
   }
 
   // Фильтруем только разрешённые поля (защита от SQL injection)
@@ -86,16 +121,19 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 
   if (Object.keys(safeUpdates).length === 0) {
-    return res.json({ success: false, message: 'Нет полей для обновления' });
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Нет валидных полей для обновления' 
+    });
   }
 
   // Безопасное обновление с параметризованными запросами
-  // Используем отдельные запросы для каждого поля вместо динамического SQL
   try {
+    // Строим динамический запрос безопасным способом
+    // Используем отдельные UPDATE для каждого поля (самый безопасный способ)
     for (const [key, value] of Object.entries(safeUpdates)) {
       const dbField = ALLOWED_UPDATE_FIELDS[key];
-      // Используем sql.unsafe для имени колонки (безопасно, т.к. dbField из whitelist)
-      await sql.unsafe(`UPDATE users SET ${dbField} = $1 WHERE id = $2`, [value, id]);
+      await sql`UPDATE users SET ${sql(dbField)} = ${value} WHERE id = ${id}`;
     }
 
     const result = await sql<User[]>`
@@ -105,13 +143,19 @@ router.patch('/:id', async (req: Request, res: Response) => {
     `;
 
     if (result.length === 0) {
-      return res.json({ success: false, message: 'Пользователь не найден' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Пользователь не найден' 
+      });
     }
 
     return res.json({ success: true, data: mapUserFromDb(result[0]) });
   } catch (error) {
     console.error('Update user error:', error);
-    return res.json({ success: false, message: 'Ошибка обновления пользователя' });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Внутренняя ошибка сервера' 
+    });
   }
 });
 

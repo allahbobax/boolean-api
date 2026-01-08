@@ -1,9 +1,14 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import { warmupDb } from './lib/db';
 import { apiKeyAuth } from './lib/apiKeyAuth';
 import { generalLimiter } from './lib/rateLimit';
+import { generateCsrfToken, csrfProtection } from './lib/csrf';
+import { logger } from './lib/logger';
 
 // Routes
 import health from './routes/health';
@@ -34,8 +39,13 @@ const allowedOriginPatterns = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
+    // Only allow requests without origin in development mode
+    if (!origin) {
+      if (process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin required'), false);
+    }
     const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
     if (isAllowed) {
       callback(null, origin);
@@ -54,11 +64,52 @@ app.use(cors({
 app.options('*', cors());
 
 app.use(express.json());
+app.use(cookieParser());
+
+// Security headers
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000, // 1 год
+    includeSubDomains: true,
+    preload: true
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'sha256-'"], // Удалили unsafe-inline, используем хеши
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://booleanclient.ru"], // Ограничили домены
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    }
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+}));
 
 // Global rate limiting
 app.use(generalLimiter);
 
-// API Key protection for sensitive routes
+// CSRF token endpoint (must be before csrfProtection middleware)
+// Rate limited to prevent token flooding attacks
+app.get('/csrf-token', generalLimiter, async (req, res) => {
+  const sessionId = req.cookies?.sessionId || crypto.randomUUID();
+  const csrfToken = await generateCsrfToken(sessionId);
+  
+  // Set session cookie
+  res.cookie('sessionId', sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 3600000 // 1 hour
+  });
+  
+  res.json({ csrfToken });
+});
+
+// API Key protection for sensitive routes (must be before CSRF)
 app.use(apiKeyAuth);
 
 // Root endpoint
@@ -68,16 +119,16 @@ app.get('/', (_req, res) => {
 
 // API Routes
 app.use('/health', health);
-app.use('/auth', auth);
+app.use('/auth', csrfProtection, auth);
 app.use('/oauth', oauth);
-app.use('/users', users);
-app.use('/hwid', hwid);
-app.use('/keys', keys);
-app.use('/incidents', incidents);
-app.use('/versions', versions);
-app.use('/products', products);
-app.use('/friends', friends);
-app.use('/client', client);
+app.use('/users', csrfProtection, users);
+app.use('/hwid', csrfProtection, hwid);
+app.use('/keys', csrfProtection, keys);
+app.use('/incidents', csrfProtection, incidents);
+app.use('/versions', csrfProtection, versions);
+app.use('/products', csrfProtection, products);
+app.use('/friends', csrfProtection, friends);
+app.use('/client', csrfProtection, client);
 app.use('/status', status);
 
 // 404 handler
@@ -86,8 +137,12 @@ app.use((_req, res) => {
 });
 
 // Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Server error:', err);
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('Server error', { 
+    endpoint: req.path, 
+    method: req.method,
+    ip: req.ip 
+  });
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 

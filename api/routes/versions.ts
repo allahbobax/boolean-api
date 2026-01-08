@@ -74,6 +74,22 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'version и downloadUrl обязательны' });
   }
 
+  // БЕЗОПАСНОСТЬ: Валидация URL
+  try {
+    const url = new URL(downloadUrl);
+    // Разрешаем только HTTPS и определенные домены
+    if (url.protocol !== 'https:') {
+      return res.status(400).json({ success: false, message: 'URL должен использовать HTTPS' });
+    }
+    // Опционально: ограничить домены
+    const allowedDomains = ['booleanclient.ru', 'github.com', 'cdn.booleanclient.ru'];
+    if (!allowedDomains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
+      return res.status(400).json({ success: false, message: 'URL должен быть с разрешенного домена' });
+    }
+  } catch (error) {
+    return res.status(400).json({ success: false, message: 'Некорректный URL' });
+  }
+
   if (isActive) {
     await sql`UPDATE client_versions SET is_active = false WHERE is_active = true`;
   }
@@ -92,6 +108,22 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const sql = getDb();
   const id = req.params.id;
   const { version, downloadUrl, description, isActive } = req.body;
+
+  // БЕЗОПАСНОСТЬ: Валидация URL если он обновляется
+  if (downloadUrl) {
+    try {
+      const url = new URL(downloadUrl);
+      if (url.protocol !== 'https:') {
+        return res.status(400).json({ success: false, message: 'URL должен использовать HTTPS' });
+      }
+      const allowedDomains = ['booleanclient.ru', 'github.com', 'cdn.booleanclient.ru'];
+      if (!allowedDomains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
+        return res.status(400).json({ success: false, message: 'URL должен быть с разрешенного домена' });
+      }
+    } catch (error) {
+      return res.status(400).json({ success: false, message: 'Некорректный URL' });
+    }
+  }
 
   if (isActive) {
     await sql`UPDATE client_versions SET is_active = false WHERE is_active = true`;

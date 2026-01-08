@@ -1,6 +1,8 @@
 import { getDb } from './db';
 import type { User } from '../types';
 import crypto from 'crypto';
+import { fetchWithTimeout } from './fetchWithTimeout';
+import { logger } from './logger';
 
 const OAUTH_USER_FIELDS = 'id, username, email, subscription, subscription_end_date, avatar, registered_at, is_admin, is_banned, email_verified, hwid, oauth_provider, oauth_id';
 
@@ -48,84 +50,137 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile, provider: str
 }
 
 export function encodeState(stateObj: Record<string, unknown>): string {
-  return Buffer.from(JSON.stringify(stateObj)).toString('base64');
+  // Добавляем криптографически стойкий nonce для защиты от CSRF
+  const nonce = crypto.randomBytes(32).toString('hex');
+  const timestamp = Date.now();
+  const stateWithSecurity = {
+    ...stateObj,
+    nonce,
+    timestamp,
+    // Добавляем подпись для проверки целостности
+    signature: crypto.createHmac('sha256', process.env.JWT_SECRET || 'fallback-secret')
+      .update(JSON.stringify({ ...stateObj, nonce, timestamp }))
+      .digest('hex')
+  };
+  return Buffer.from(JSON.stringify(stateWithSecurity)).toString('base64url');
 }
 
 export function decodeState(stateStr: string | null): Record<string, unknown> {
   if (!stateStr) return {};
   if (stateStr === 'launcher') return { source: 'launcher' };
   if (stateStr === 'web') return { source: 'web' };
+  
   try {
-    const decoded = Buffer.from(stateStr, 'base64').toString('utf-8');
-    if (decoded.trim().startsWith('{')) return JSON.parse(decoded);
+    const decoded = Buffer.from(stateStr, 'base64url').toString('utf-8');
+    if (decoded.trim().startsWith('{')) {
+      const parsed = JSON.parse(decoded);
+      
+      // Проверяем подпись для защиты от подделки
+      if (parsed.signature && parsed.nonce && parsed.timestamp) {
+        const { signature, ...dataToVerify } = parsed;
+        const expectedSignature = crypto.createHmac('sha256', process.env.JWT_SECRET || 'fallback-secret')
+          .update(JSON.stringify(dataToVerify))
+          .digest('hex');
+        
+        if (signature !== expectedSignature) {
+          logger.warn('State signature verification failed');
+          return {};
+        }
+        
+        // Проверяем время жизни state (максимум 10 минут)
+        const maxAge = 10 * 60 * 1000; // 10 минут
+        if (Date.now() - parsed.timestamp > maxAge) {
+          logger.warn('State expired');
+          return {};
+        }
+      }
+      
+      return parsed;
+    }
     return { source: stateStr };
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to decode state');
     return { source: stateStr };
   }
 }
 
 export async function handleGitHub(code: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code })
-  });
-  const tokens = await tokenResponse.json() as { access_token?: string };
-  if (!tokens.access_token) throw new Error('Token failed');
+  try {
+    const tokenResponse = await fetchWithTimeout('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code })
+    }, 10000);
+    const tokens = await tokenResponse.json() as { access_token?: string };
+    if (!tokens.access_token) throw new Error('Token failed');
 
-  const userResponse = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-  });
-  const profile = await userResponse.json() as { id: number; email: string | null; name: string; login: string; avatar_url: string };
-
-  let email = profile.email;
-  if (!email) {
-    const emailsResponse = await fetch('https://api.github.com/user/emails', {
+    const userResponse = await fetchWithTimeout('https://api.github.com/user', {
       headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-    });
-    const emails = await emailsResponse.json() as { email: string; primary: boolean }[];
-    const primaryEmail = emails.find(e => e.primary);
-    email = primaryEmail ? primaryEmail.email : null;
-  }
+    }, 10000);
+    const profile = await userResponse.json() as { id: number; email: string | null; name: string; login: string; avatar_url: string };
 
-  return { id: profile.id.toString(), email, name: profile.name || profile.login, login: profile.login, avatar: profile.avatar_url };
+    let email = profile.email;
+    if (!email) {
+      const emailsResponse = await fetchWithTimeout('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
+      }, 10000);
+      const emails = await emailsResponse.json() as { email: string; primary: boolean }[];
+      const primaryEmail = emails.find(e => e.primary);
+      email = primaryEmail ? primaryEmail.email : null;
+    }
+
+    return { id: profile.id.toString(), email, name: profile.name || profile.login, login: profile.login, avatar: profile.avatar_url };
+  } catch (error) {
+    logger.error('GitHub OAuth failed', { provider: 'github' });
+    throw error;
+  }
 }
 
 export async function handleGoogle(code: string, redirectUri: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code, client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: redirectUri, grant_type: 'authorization_code'
-    })
-  });
-  const tokens = await tokenResponse.json() as { access_token?: string };
-  if (!tokens.access_token) throw new Error('Token failed');
+  try {
+    const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        redirect_uri: redirectUri, grant_type: 'authorization_code'
+      })
+    }, 10000);
+    const tokens = await tokenResponse.json() as { access_token?: string };
+    if (!tokens.access_token) throw new Error('Token failed');
 
-  const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: { Authorization: `Bearer ${tokens.access_token}` }
-  });
-  const profile = await userResponse.json() as { id: string; email: string; name: string; picture: string };
-  return { id: profile.id, email: profile.email, name: profile.name, avatar: profile.picture };
+    const userResponse = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    }, 10000);
+    const profile = await userResponse.json() as { id: string; email: string; name: string; picture: string };
+    return { id: profile.id, email: profile.email, name: profile.name, avatar: profile.picture };
+  } catch (error) {
+    logger.error('Google OAuth failed', { provider: 'google' });
+    throw error;
+  }
 }
 
 export async function handleYandex(code: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch('https://oauth.yandex.ru/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code', code, client_id: process.env.YANDEX_CLIENT_ID!, client_secret: process.env.YANDEX_CLIENT_SECRET!
-    })
-  });
-  const tokens = await tokenResponse.json() as { access_token?: string };
-  if (!tokens.access_token) throw new Error('Token failed');
+  try {
+    const tokenResponse = await fetchWithTimeout('https://oauth.yandex.ru/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', code, client_id: process.env.YANDEX_CLIENT_ID!, client_secret: process.env.YANDEX_CLIENT_SECRET!
+      })
+    }, 10000);
+    const tokens = await tokenResponse.json() as { access_token?: string };
+    if (!tokens.access_token) throw new Error('Token failed');
 
-  const userResponse = await fetch('https://login.yandex.ru/info?format=json', {
-    headers: { Authorization: `OAuth ${tokens.access_token}` }
-  });
-  const profile = await userResponse.json() as { id: string; default_email: string; display_name: string; login: string; default_avatar_id: string };
-  const avatarId = profile.default_avatar_id;
-  const avatar = avatarId ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200` : null;
-  return { id: profile.id, email: profile.default_email || `${profile.id}@yandex.oauth`, name: profile.display_name || profile.login, avatar };
+    const userResponse = await fetchWithTimeout('https://login.yandex.ru/info?format=json', {
+      headers: { Authorization: `OAuth ${tokens.access_token}` }
+    }, 10000);
+    const profile = await userResponse.json() as { id: string; default_email: string; display_name: string; login: string; default_avatar_id: string };
+    const avatarId = profile.default_avatar_id;
+    const avatar = avatarId ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200` : null;
+    return { id: profile.id, email: profile.default_email || `${profile.id}@yandex.oauth`, name: profile.display_name || profile.login, avatar };
+  } catch (error) {
+    logger.error('Yandex OAuth failed', { provider: 'yandex' });
+    throw error;
+  }
 }

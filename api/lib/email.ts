@@ -1,7 +1,10 @@
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import { logger } from './logger';
 
 export function generateVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Криптографически стойкая генерация 6-значного кода
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 function getTransporter() {
@@ -22,7 +25,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
     await transporter.sendMail({ from: process.env.SMTP_FROM, to, subject, html });
     return true;
   } catch (error) {
-    console.error('Email error:', error);
+    logger.error('Email sending failed', { subject });
     return false;
   }
 }

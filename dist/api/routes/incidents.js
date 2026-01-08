@@ -1,10 +1,12 @@
-import { Router } from 'express';
-import { getDb, ensureIncidentsTables } from '../lib/db';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const router = (0, express_1.Router)();
 async function isAdmin(userId) {
     if (!userId)
         return false;
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const result = await sql `SELECT is_admin FROM users WHERE id = ${userId}`;
     return result.length > 0 && result[0].is_admin;
 }
@@ -24,8 +26,8 @@ function formatIncident(row) {
 }
 // Get active incidents
 router.get('/active', async (_req, res) => {
-    const sql = getDb();
-    await ensureIncidentsTables();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureIncidentsTables)();
     const result = await sql `
     SELECT i.*, 
       COALESCE(json_agg(
@@ -42,8 +44,8 @@ router.get('/active', async (_req, res) => {
 });
 // Get all incidents
 router.get('/', async (req, res) => {
-    const sql = getDb();
-    await ensureIncidentsTables();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureIncidentsTables)();
     const limit = parseInt(req.query.limit || '50');
     const result = await sql `
     SELECT i.*, 
@@ -61,8 +63,8 @@ router.get('/', async (req, res) => {
 });
 // Create incident
 router.post('/', async (req, res) => {
-    const sql = getDb();
-    await ensureIncidentsTables();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureIncidentsTables)();
     const userId = req.query.userId ? Number(req.query.userId) : req.body?.userId;
     const { title, description, severity, affectedServices } = req.body;
     if (!await isAdmin(userId)) {
@@ -84,8 +86,8 @@ router.post('/', async (req, res) => {
 });
 // Add update to incident
 router.post('/update', async (req, res) => {
-    const sql = getDb();
-    await ensureIncidentsTables();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureIncidentsTables)();
     const userId = req.query.userId ? Number(req.query.userId) : req.body?.userId;
     const { incidentId, status, message } = req.body;
     if (!await isAdmin(userId)) {
@@ -105,7 +107,7 @@ router.post('/update', async (req, res) => {
 });
 // Update incident
 router.put('/:id', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const userId = req.query.userId ? Number(req.query.userId) : req.body?.userId;
     const { title, description, severity, affectedServices, status } = req.body;
@@ -128,7 +130,7 @@ router.put('/:id', async (req, res) => {
 });
 // Delete incident
 router.delete('/:id', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const userId = req.query.userId ? Number(req.query.userId) : req.body?.userId;
     if (!await isAdmin(userId)) {
@@ -137,4 +139,4 @@ router.delete('/:id', async (req, res) => {
     await sql `DELETE FROM incidents WHERE id = ${id}`;
     return res.json({ success: true, message: 'Incident deleted' });
 });
-export default router;
+exports.default = router;

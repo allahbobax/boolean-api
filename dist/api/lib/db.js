@@ -1,21 +1,45 @@
-import postgres from 'postgres';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getDb = getDb;
+exports.warmupDb = warmupDb;
+exports.ensureUserSchema = ensureUserSchema;
+exports.ensureKeysTable = ensureKeysTable;
+exports.ensureLicenseKeysTable = ensureLicenseKeysTable;
+exports.ensureIncidentsTables = ensureIncidentsTables;
+exports.ensureFriendshipsTable = ensureFriendshipsTable;
+exports.ensureVersionsTable = ensureVersionsTable;
+const postgres_1 = __importDefault(require("postgres"));
 let sql = null;
-export function getDb() {
+function getDb() {
     if (!sql) {
         const url = process.env.DATABASE_URL;
         if (!url) {
             throw new Error('DATABASE_URL is not configured');
         }
-        sql = postgres(url, {
+        sql = (0, postgres_1.default)(url, {
             ssl: 'require',
             max: 10,
             idle_timeout: 20,
             connect_timeout: 10,
+            prepare: false, // Disable prepared statements for serverless (reduces cold start)
         });
     }
     return sql;
 }
-export async function ensureUserSchema() {
+// Warm up connection pool - call this early in request lifecycle
+async function warmupDb() {
+    try {
+        const db = getDb();
+        await db `SELECT 1`;
+    }
+    catch {
+        // Ignore warmup errors
+    }
+}
+async function ensureUserSchema() {
     const db = getDb();
     try {
         await db `
@@ -47,7 +71,7 @@ export async function ensureUserSchema() {
         console.error('Ensure user schema error:', error);
     }
 }
-export async function ensureKeysTable() {
+async function ensureKeysTable() {
     const db = getDb();
     try {
         await db `
@@ -65,7 +89,7 @@ export async function ensureKeysTable() {
         console.error('Ensure keys table error:', error);
     }
 }
-export async function ensureLicenseKeysTable() {
+async function ensureLicenseKeysTable() {
     const db = getDb();
     try {
         await db `
@@ -86,7 +110,7 @@ export async function ensureLicenseKeysTable() {
         console.error('Ensure license_keys table error:', error);
     }
 }
-export async function ensureIncidentsTables() {
+async function ensureIncidentsTables() {
     const db = getDb();
     try {
         await db `
@@ -116,7 +140,7 @@ export async function ensureIncidentsTables() {
         console.error('Ensure incidents tables error:', error);
     }
 }
-export async function ensureFriendshipsTable() {
+async function ensureFriendshipsTable() {
     const db = getDb();
     try {
         await db `
@@ -134,7 +158,7 @@ export async function ensureFriendshipsTable() {
         console.error('Ensure friendships table error:', error);
     }
 }
-export async function ensureVersionsTable() {
+async function ensureVersionsTable() {
     const db = getDb();
     try {
         await db `

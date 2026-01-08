@@ -5,3 +5,8 @@ export declare function passwordsMatch(user: {
     id: number;
     password: string | null;
 }, inputPassword: string): Promise<boolean>;
+export declare function generateSecurePassword(length?: number): string;
+export declare function validatePasswordStrength(password: string): {
+    valid: boolean;
+    errors: string[];
+};

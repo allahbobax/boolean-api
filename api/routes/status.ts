@@ -3,6 +3,14 @@ import { getDb } from '../lib/db';
 
 const router = Router();
 
+// In-memory cache for live check results (to avoid hammering external services)
+let liveCheckCache: {
+  data: Array<{ name: string; status: string; responseTime: number }> | null;
+  timestamp: number;
+} = { data: null, timestamp: 0 };
+
+const CACHE_DURATION = 30000; // 30 seconds cache
+
 // Ensure status_history table exists
 async function ensureStatusTable() {
   const db = getDb();
@@ -32,7 +40,7 @@ async function checkService(url: string): Promise<{ status: string; responseTime
   try {
     const response = await fetch(url, { 
       method: 'GET', 
-      signal: AbortSignal.timeout(10000) 
+      signal: AbortSignal.timeout(5000) // Reduced from 10s to 5s
     });
     const responseTime = Date.now() - start;
     
@@ -44,7 +52,7 @@ async function checkService(url: string): Promise<{ status: string; responseTime
     }
     return { status: 'partial', responseTime };
   } catch {
-    return { status: 'major', responseTime: 0 };
+    return { status: 'major', responseTime: Date.now() - start };
   }
 }
 
@@ -123,6 +131,17 @@ router.get('/', async (_req: Request, res: Response) => {
 // POST /status/check - Run a check and save to DB (called by cron or status page)
 router.post('/check', async (_req: Request, res: Response) => {
   try {
+    // Check cache first
+    const now = Date.now();
+    if (liveCheckCache.data && (now - liveCheckCache.timestamp) < CACHE_DURATION) {
+      return res.json({ 
+        success: true, 
+        data: liveCheckCache.data,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     await ensureStatusTable();
     const db = getDb();
     
@@ -143,6 +162,12 @@ router.post('/check', async (_req: Request, res: Response) => {
       { name: 'Launcher', ...launcherStatus },
     ];
     
+    // Update cache
+    liveCheckCache = {
+      data: checks,
+      timestamp: now
+    };
+    
     // Insert all checks
     for (const check of checks) {
       await db`
@@ -160,6 +185,7 @@ router.post('/check', async (_req: Request, res: Response) => {
     return res.json({ 
       success: true, 
       data: checks,
+      cached: false,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

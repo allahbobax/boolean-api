@@ -56,6 +56,11 @@ export async function ensureUserSchema() {
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code VARCHAR(6)`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code_expires TIMESTAMP WITH TIME ZONE`;
+    
+    // БЕЗОПАСНОСТЬ: Добавляем поля для защиты от брутфорса
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_locked_until TIMESTAMP WITH TIME ZONE`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login TIMESTAMP WITH TIME ZONE`;
   } catch (error) {
     console.error('Ensure user schema error:', error);
   }

@@ -1,6 +1,8 @@
 /**
  * Cloudflare Turnstile server-side verification
  */
+import { logger } from './logger';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY
 
@@ -35,23 +37,23 @@ export async function verifyTurnstileToken(token: string, remoteIp?: string): Pr
       formData.append('remoteip', remoteIp)
     }
 
-    const response = await fetch(TURNSTILE_VERIFY_URL, {
+    const response = await fetchWithTimeout(TURNSTILE_VERIFY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
-    })
+    }, 5000)
 
     const data: TurnstileVerifyResponse = await response.json()
 
     if (!data.success) {
-      console.warn('Turnstile verification failed:', data['error-codes'])
+      logger.warn('Turnstile verification failed', { errorCodes: data['error-codes'] })
     }
 
     return data.success
   } catch (error) {
-    console.error('Turnstile verification error:', error)
+    logger.error('Turnstile verification error', { ip: remoteIp })
     return false
   }
 }

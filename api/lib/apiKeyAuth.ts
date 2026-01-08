@@ -1,7 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 
 // API Key для внутренних запросов (сайт, лаунчер)
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+
+/**
+ * Безопасное сравнение строк, защищенное от timing attacks
+ */
+function timingSafeCompare(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  
+  const providedBuf = Buffer.from(provided, 'utf8');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  
+  if (providedBuf.length !== expectedBuf.length) {
+    // Добавляем фиктивное сравнение для защиты от timing
+    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
+    return false;
+  }
+  
+  return crypto.timingSafeEqual(providedBuf, expectedBuf);
+}
 
 // Публичные роуты которые не требуют API ключа
 const PUBLIC_ROUTES = [
@@ -56,7 +75,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
   
-  if (!apiKey || apiKey !== INTERNAL_API_KEY) {
+  if (!apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
     console.log(`[apiKeyAuth] Access denied for path: ${path}`);
     return res.status(403).json({ 
       success: false, 
@@ -71,7 +90,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
 export function adminOnly(req: Request, res: Response, next: NextFunction) {
   const apiKey = req.headers['x-api-key'];
   
-  if (!INTERNAL_API_KEY || !apiKey || apiKey !== INTERNAL_API_KEY) {
+  if (!INTERNAL_API_KEY || !apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
     return res.status(403).json({ 
       success: false, 
       message: 'Access denied' 

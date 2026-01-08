@@ -1,10 +1,12 @@
-import { Router } from 'express';
-import { getDb, ensureLicenseKeysTable } from '../lib/db';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const router = (0, express_1.Router)();
 // Get all keys
 router.get('/', async (_req, res) => {
-    const sql = getDb();
-    await ensureLicenseKeysTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureLicenseKeysTable)();
     const result = await sql `
     SELECT lk.*, u.username as created_by_name, used_user.username as used_by_name 
     FROM license_keys lk 
@@ -29,8 +31,8 @@ router.get('/', async (_req, res) => {
 });
 // Create keys
 router.post('/', async (req, res) => {
-    const sql = getDb();
-    await ensureLicenseKeysTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureLicenseKeysTable)();
     const { keys } = req.body;
     if (!keys || !Array.isArray(keys) || keys.length === 0) {
         return res.status(400).json({ success: false, message: 'Неверный формат данных' });
@@ -48,8 +50,8 @@ router.post('/', async (req, res) => {
 });
 // Activate key
 router.post('/activate', async (req, res) => {
-    const sql = getDb();
-    await ensureLicenseKeysTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureLicenseKeysTable)();
     const { key, userId } = req.body;
     if (!key || !userId) {
         return res.status(400).json({ success: false, message: 'Ключ и ID пользователя обязательны' });
@@ -89,7 +91,7 @@ router.post('/activate', async (req, res) => {
 });
 // Delete key
 router.delete('/:id', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const result = await sql `
     DELETE FROM license_keys WHERE id = ${id} RETURNING *
@@ -99,4 +101,4 @@ router.delete('/:id', async (req, res) => {
     }
     return res.json({ success: true, message: 'Ключ удален' });
 });
-export default router;
+exports.default = router;

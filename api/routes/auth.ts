@@ -6,8 +6,29 @@ import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail
 import { mapUserFromDb } from '../lib/userMapper';
 import { verifyTurnstileToken } from '../lib/turnstile';
 import { authLimiter, registerLimiter, emailLimiter, forgotPasswordLimiter, verifyCodeLimiter } from '../lib/rateLimit';
+import { logger } from '../lib/logger';
 
 const router = Router();
+
+// Валидация надежности пароля
+function validatePassword(password: string): { valid: boolean; message?: string } {
+  if (password.length < 12) {
+    return { valid: false, message: 'Пароль должен быть минимум 12 символов' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать заглавную букву' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать строчную букву' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать цифру' };
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return { valid: false, message: 'Пароль должен содержать спецсимвол' };
+  }
+  return { valid: true };
+}
 
 // Login
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
@@ -25,7 +46,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 
   const result = await sql<User[]>`
     SELECT id, username, email, password, subscription, subscription_end_date, registered_at, 
-           is_admin, is_banned, email_verified, settings, avatar, hwid
+           is_admin, is_banned, email_verified, settings, avatar, hwid,
+           failed_login_attempts, account_locked_until, last_failed_login
     FROM users 
     WHERE username = ${usernameOrEmail} OR email = ${usernameOrEmail}
     LIMIT 1
@@ -36,20 +58,77 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   }
 
   const dbUser = result[0];
+
+  // БЕЗОПАСНОСТЬ: Проверка блокировки аккаунта
+  if (dbUser.account_locked_until && new Date(dbUser.account_locked_until) > new Date()) {
+    const minutesLeft = Math.ceil((new Date(dbUser.account_locked_until).getTime() - Date.now()) / 60000);
+    logger.warn('Login attempt on locked account', { userId: dbUser.id, ip: clientIp });
+    return res.json({ 
+      success: false, 
+      message: `Аккаунт временно заблокирован. Попробуйте через ${minutesLeft} мин.` 
+    });
+  }
+
   const isPasswordValid = await passwordsMatch({ id: dbUser.id, password: dbUser.password ?? null }, password);
 
   if (!isPasswordValid) {
-    return res.json({ success: false, message: 'Неверный логин или пароль' });
+    // БЕЗОПАСНОСТЬ: Увеличиваем счетчик неудачных попыток
+    const failedAttempts = (dbUser.failed_login_attempts || 0) + 1;
+    const now = new Date();
+    
+    // Блокируем аккаунт после 5 неудачных попыток на 30 минут
+    if (failedAttempts >= 5) {
+      const lockUntil = new Date(now.getTime() + 30 * 60 * 1000); // 30 минут
+      await sql`
+        UPDATE users 
+        SET failed_login_attempts = ${failedAttempts}, 
+            last_failed_login = ${now},
+            account_locked_until = ${lockUntil}
+        WHERE id = ${dbUser.id}
+      `;
+      logger.warn('Account locked due to failed login attempts', { userId: dbUser.id, ip: clientIp });
+      return res.json({ 
+        success: false, 
+        message: 'Слишком много неудачных попыток. Аккаунт заблокирован на 30 минут.' 
+      });
+    }
+    
+    // Обновляем счетчик неудачных попыток
+    await sql`
+      UPDATE users 
+      SET failed_login_attempts = ${failedAttempts}, 
+          last_failed_login = ${now}
+      WHERE id = ${dbUser.id}
+    `;
+    
+    logger.warn('Failed login attempt', { userId: dbUser.id, attempts: failedAttempts, ip: clientIp });
+    
+    const attemptsLeft = 5 - failedAttempts;
+    return res.json({ 
+      success: false, 
+      message: `Неверный логин или пароль. Осталось попыток: ${attemptsLeft}` 
+    });
   }
 
   if (dbUser.is_banned) {
     return res.json({ success: false, message: 'Ваш аккаунт заблокирован' });
   }
 
+  // БЕЗОПАСНОСТЬ: Сбрасываем счетчик при успешном входе
+  await sql`
+    UPDATE users 
+    SET failed_login_attempts = 0, 
+        account_locked_until = NULL,
+        last_failed_login = NULL,
+        hwid = ${hwid || dbUser.hwid}
+    WHERE id = ${dbUser.id}
+  `;
+
   if (hwid) {
-    await sql`UPDATE users SET hwid = ${hwid} WHERE id = ${dbUser.id}`;
     dbUser.hwid = hwid;
   }
+
+  logger.info('Successful login', { userId: dbUser.id, ip: clientIp });
 
   return res.json({ success: true, message: 'Вход выполнен!', data: mapUserFromDb(dbUser) });
 });
@@ -60,6 +139,12 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
   await ensureUserSchema();
   
   const { username, email, password, hwid, turnstileToken } = req.body;
+
+  // Валидация надежности пароля
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    return res.json({ success: false, message: passwordValidation.message });
+  }
 
   // Verify Turnstile token
   const clientIp = req.headers['x-forwarded-for'] as string || req.ip;
@@ -78,7 +163,8 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       return res.json({ success: false, message: 'Пользователь с таким логином уже существует' });
     }
     if (existing.email === email) {
-      return res.json({ success: false, message: 'Email уже зарегистрирован' });
+      // Не раскрываем, что email существует - возвращаем общее сообщение
+      return res.json({ success: true, message: 'Если email доступен, код подтверждения будет отправлен' });
     }
   }
 
@@ -189,8 +275,9 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
 
   const result = await sql<User[]>`SELECT * FROM users WHERE email = ${email}`;
 
+  // Всегда возвращаем успех, чтобы не раскрывать существование email
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Пользователь с таким email не найден' });
+    return res.json({ success: true, message: 'Если email существует в системе, код отправлен' });
   }
 
   const user = result[0];
@@ -204,9 +291,10 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
   const emailSent = await sendPasswordResetEmail(email, user.username, resetCode);
 
   if (emailSent) {
-    return res.json({ success: true, message: 'Код отправлен на email', userId: user.id });
+    return res.json({ success: true, message: 'Если email существует в системе, код отправлен', userId: user.id });
   }
-  return res.json({ success: false, message: 'Ошибка отправки кода' });
+  // Даже при ошибке отправки не раскрываем детали
+  return res.json({ success: true, message: 'Если email существует в системе, код отправлен' });
 });
 
 // Verify reset code
@@ -250,8 +338,10 @@ router.post('/reset-password', verifyCodeLimiter, async (req: Request, res: Resp
     return res.json({ success: false, message: 'Заполните все поля' });
   }
 
-  if (newPassword.length < 6) {
-    return res.json({ success: false, message: 'Пароль должен быть минимум 6 символов' });
+  // Валидация надежности пароля
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    return res.json({ success: false, message: passwordValidation.message });
   }
 
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
@@ -292,7 +382,7 @@ router.get('/check', async (_req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Auth check error:', error);
+    logger.error('Auth health check failed');
     return res.status(500).json({ 
       status: 'error', 
       service: 'auth',

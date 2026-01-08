@@ -1,10 +1,12 @@
-import { Router } from 'express';
-import { getDb, ensureFriendshipsTable } from '../lib/db';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const router = (0, express_1.Router)();
 // Get friends
 router.get('/', async (req, res) => {
-    const sql = getDb();
-    await ensureFriendshipsTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureFriendshipsTable)();
     const userId = req.query.userId;
     if (!userId) {
         return res.status(400).json({ success: false, message: 'userId required' });
@@ -42,8 +44,8 @@ router.get('/', async (req, res) => {
 });
 // Send friend request / Accept / Reject
 router.post('/', async (req, res) => {
-    const sql = getDb();
-    await ensureFriendshipsTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureFriendshipsTable)();
     const { userId, friendUsername, action, friendshipId } = req.body;
     if (!userId) {
         return res.status(400).json({ success: false, message: 'userId required' });
@@ -86,7 +88,7 @@ router.post('/', async (req, res) => {
 });
 // Remove friend
 router.delete('/', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const { friendshipId, userId } = req.body;
     if (!friendshipId || !userId) {
         return res.status(400).json({ success: false, message: 'friendshipId and userId required' });
@@ -96,4 +98,4 @@ router.delete('/', async (req, res) => {
   `;
     return res.json({ success: true, message: 'Friend removed' });
 });
-export default router;
+exports.default = router;

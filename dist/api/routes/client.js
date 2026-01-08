@@ -1,9 +1,11 @@
-import { Router } from 'express';
-import { getDb } from '../lib/db';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const router = (0, express_1.Router)();
 // Get active client version
 router.get('/version', async (_req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     // Try to get active version first
     let result = await sql `
     SELECT id, version, download_url, description, created_at
@@ -35,4 +37,4 @@ router.get('/version', async (_req, res) => {
         }
     });
 });
-export default router;
+exports.default = router;

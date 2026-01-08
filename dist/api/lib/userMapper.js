@@ -1,4 +1,8 @@
-export function mapUserFromDb(dbUser) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mapUserFromDb = mapUserFromDb;
+exports.mapOAuthUser = mapOAuthUser;
+function mapUserFromDb(dbUser) {
     const normalizedSubscription = String(dbUser.subscription || 'free').trim().toLowerCase();
     const subscription = normalizedSubscription === 'premium' || normalizedSubscription === 'alpha'
         ? normalizedSubscription : 'free';
@@ -17,7 +21,7 @@ export function mapUserFromDb(dbUser) {
         hwid: dbUser.hwid || null
     };
 }
-export function mapOAuthUser(dbUser, token) {
+function mapOAuthUser(dbUser, token) {
     const normalizedSubscription = String(dbUser.subscription || 'free').trim().toLowerCase();
     const subscription = normalizedSubscription === 'premium' || normalizedSubscription === 'alpha'
         ? normalizedSubscription : 'free';

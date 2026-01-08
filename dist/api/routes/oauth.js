@@ -1,8 +1,11 @@
-import { Router } from 'express';
-import { generateToken } from '../lib/jwt';
-import { mapOAuthUser } from '../lib/userMapper';
-import { findOrCreateOAuthUser, encodeState, decodeState, handleGitHub, handleGoogle, handleYandex } from '../lib/oauth';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const jwt_1 = require("../lib/jwt");
+const userMapper_1 = require("../lib/userMapper");
+const oauth_1 = require("../lib/oauth");
+const logger_1 = require("../lib/logger");
+const router = (0, express_1.Router)();
 // OAuth redirect
 router.get('/:provider', async (req, res) => {
     const provider = req.params.provider;
@@ -25,7 +28,7 @@ router.get('/:provider', async (req, res) => {
         source: isLauncher ? 'launcher' : 'web',
         hwid: hwid || null
     };
-    const state = encodeState(stateObj);
+    const state = (0, oauth_1.encodeState)(stateObj);
     const urls = {
         github: `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent('user:email')}&state=${state}`,
         google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('profile email')}&access_type=offline&state=${state}`,
@@ -41,7 +44,7 @@ router.get('/:provider/callback', async (req, res) => {
     const state = req.query.state;
     const redirect = req.query.redirect;
     const frontendUrl = process.env.FRONTEND_URL || 'https://booleanclient.ru';
-    const stateData = decodeState(state || null);
+    const stateData = (0, oauth_1.decodeState)(state || null);
     const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
     const hwid = stateData.hwid;
     if (error || !code) {
@@ -55,20 +58,20 @@ router.get('/:provider/callback', async (req, res) => {
         let profile;
         switch (provider) {
             case 'github':
-                profile = await handleGitHub(code);
+                profile = await (0, oauth_1.handleGitHub)(code);
                 break;
             case 'google':
-                profile = await handleGoogle(code, redirectUri);
+                profile = await (0, oauth_1.handleGoogle)(code, redirectUri);
                 break;
             case 'yandex':
-                profile = await handleYandex(code);
+                profile = await (0, oauth_1.handleYandex)(code);
                 break;
             default:
                 throw new Error('Invalid provider');
         }
-        const user = await findOrCreateOAuthUser(profile, provider, hwid);
-        const token = await generateToken(user);
-        const userData = mapOAuthUser(user, token);
+        const user = await (0, oauth_1.findOrCreateOAuthUser)(profile, provider, hwid);
+        const token = await (0, jwt_1.generateToken)(user);
+        const userData = (0, userMapper_1.mapOAuthUser)(user, token);
         const encodedUser = encodeURIComponent(JSON.stringify(userData));
         if (isLauncher) {
             return res.redirect(`http://127.0.0.1:3000/callback?user=${encodedUser}`);
@@ -76,7 +79,7 @@ router.get('/:provider/callback', async (req, res) => {
         return res.redirect(`${frontendUrl}/auth?auth=success&user=${encodedUser}`);
     }
     catch (err) {
-        console.error(`${provider} OAuth error:`, err);
+        logger_1.logger.error('OAuth callback failed', { provider, ip: req.ip });
         if (isLauncher) {
             return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
         }
@@ -92,7 +95,7 @@ router.get('/:provider/exchange', async (req, res) => {
     if (!code) {
         return res.redirect(`http://127.0.0.1:3000/callback?error=no_code`);
     }
-    const stateData = decodeState(state || null);
+    const stateData = (0, oauth_1.decodeState)(state || null);
     const hwid = stateData.hwid;
     if (source !== 'launcher') {
         return res.status(400).json({ success: false, message: 'Invalid source' });
@@ -101,26 +104,26 @@ router.get('/:provider/exchange', async (req, res) => {
         let profile;
         switch (provider) {
             case 'github':
-                profile = await handleGitHub(code);
+                profile = await (0, oauth_1.handleGitHub)(code);
                 break;
             case 'google':
-                profile = await handleGoogle(code, '');
+                profile = await (0, oauth_1.handleGoogle)(code, '');
                 break;
             case 'yandex':
-                profile = await handleYandex(code);
+                profile = await (0, oauth_1.handleYandex)(code);
                 break;
             default:
                 throw new Error('Invalid provider');
         }
-        const user = await findOrCreateOAuthUser(profile, provider, hwid);
-        const token = await generateToken(user);
-        const userData = mapOAuthUser(user, token);
+        const user = await (0, oauth_1.findOrCreateOAuthUser)(profile, provider, hwid);
+        const token = await (0, jwt_1.generateToken)(user);
+        const userData = (0, userMapper_1.mapOAuthUser)(user, token);
         const encodedUser = encodeURIComponent(JSON.stringify(userData));
         return res.redirect(`http://127.0.0.1:3000/callback?user=${encodedUser}`);
     }
     catch (err) {
-        console.error(`${provider} OAuth exchange error:`, err);
+        logger_1.logger.error('OAuth exchange failed', { provider, ip: req.ip });
         return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
     }
 });
-export default router;
+exports.default = router;

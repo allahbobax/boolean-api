@@ -1,6 +1,8 @@
-import { Router } from 'express';
-import { getDb, ensureVersionsTable } from '../lib/db';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const router = (0, express_1.Router)();
 function formatVersion(v) {
     return {
         id: v.id,
@@ -13,8 +15,8 @@ function formatVersion(v) {
 }
 // Get all versions
 router.get('/', async (_req, res) => {
-    const sql = getDb();
-    await ensureVersionsTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureVersionsTable)();
     const result = await sql `
     SELECT id, version, download_url, description, is_active, created_at
     FROM client_versions
@@ -25,8 +27,8 @@ router.get('/', async (_req, res) => {
 // Get latest version
 router.get('/latest', async (_req, res) => {
     try {
-        const sql = getDb();
-        await ensureVersionsTable();
+        const sql = (0, db_1.getDb)();
+        await (0, db_1.ensureVersionsTable)();
         const result = await sql `
       SELECT id, version, download_url, description, is_active, created_at
       FROM client_versions
@@ -55,8 +57,8 @@ router.get('/latest', async (_req, res) => {
 });
 // Create version
 router.post('/', async (req, res) => {
-    const sql = getDb();
-    await ensureVersionsTable();
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureVersionsTable)();
     const { version, downloadUrl, description, isActive } = req.body;
     if (!version || !downloadUrl) {
         return res.status(400).json({ success: false, message: 'version и downloadUrl обязательны' });
@@ -73,7 +75,7 @@ router.post('/', async (req, res) => {
 });
 // Update version
 router.patch('/:id', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const { version, downloadUrl, description, isActive } = req.body;
     if (isActive) {
@@ -95,7 +97,7 @@ router.patch('/:id', async (req, res) => {
 });
 // Delete version
 router.delete('/:id', async (req, res) => {
-    const sql = getDb();
+    const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const result = await sql `DELETE FROM client_versions WHERE id = ${id} RETURNING id`;
     if (result.length === 0) {
@@ -103,4 +105,4 @@ router.delete('/:id', async (req, res) => {
     }
     return res.json({ success: true, message: 'Версия удалена' });
 });
-export default router;
+exports.default = router;

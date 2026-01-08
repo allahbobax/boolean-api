@@ -1,9 +1,20 @@
-import nodemailer from 'nodemailer';
-export function generateVerificationCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateVerificationCode = generateVerificationCode;
+exports.sendPasswordResetEmail = sendPasswordResetEmail;
+exports.sendVerificationEmail = sendVerificationEmail;
+const nodemailer_1 = __importDefault(require("nodemailer"));
+const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("./logger");
+function generateVerificationCode() {
+    // Криптографически стойкая генерация 6-значного кода
+    return crypto_1.default.randomInt(100000, 1000000).toString();
 }
 function getTransporter() {
-    return nodemailer.createTransport({
+    return nodemailer_1.default.createTransport({
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587'),
         secure: process.env.SMTP_PORT === '465',
@@ -20,11 +31,11 @@ async function sendEmail(to, subject, html) {
         return true;
     }
     catch (error) {
-        console.error('Email error:', error);
+        logger_1.logger.error('Email sending failed', { subject });
         return false;
     }
 }
-export async function sendPasswordResetEmail(email, username, resetCode) {
+async function sendPasswordResetEmail(email, username, resetCode) {
     const html = `
     <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;margin:0;padding:24px;color:#fff}
@@ -51,7 +62,7 @@ export async function sendPasswordResetEmail(email, username, resetCode) {
     </div></body></html>`;
     return sendEmail(email, 'Сброс пароля - BOOLEAN', html);
 }
-export async function sendVerificationEmail(email, username, verificationCode) {
+async function sendVerificationEmail(email, username, verificationCode) {
     const html = `
     <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;margin:0;padding:24px;color:#fff}

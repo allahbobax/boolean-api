@@ -1,14 +1,44 @@
-import { Router } from 'express';
-import { getDb, ensureUserSchema } from '../lib/db';
-import { hashPassword, passwordsMatch } from '../lib/password';
-import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
-import { mapUserFromDb } from '../lib/userMapper';
-const router = Router();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../lib/db");
+const password_1 = require("../lib/password");
+const email_1 = require("../lib/email");
+const userMapper_1 = require("../lib/userMapper");
+const turnstile_1 = require("../lib/turnstile");
+const rateLimit_1 = require("../lib/rateLimit");
+const logger_1 = require("../lib/logger");
+const router = (0, express_1.Router)();
+// Валидация надежности пароля
+function validatePassword(password) {
+    if (password.length < 12) {
+        return { valid: false, message: 'Пароль должен быть минимум 12 символов' };
+    }
+    if (!/[A-Z]/.test(password)) {
+        return { valid: false, message: 'Пароль должен содержать заглавную букву' };
+    }
+    if (!/[a-z]/.test(password)) {
+        return { valid: false, message: 'Пароль должен содержать строчную букву' };
+    }
+    if (!/[0-9]/.test(password)) {
+        return { valid: false, message: 'Пароль должен содержать цифру' };
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        return { valid: false, message: 'Пароль должен содержать спецсимвол' };
+    }
+    return { valid: true };
+}
 // Login
-router.post('/login', async (req, res) => {
-    const sql = getDb();
-    await ensureUserSchema();
-    const { usernameOrEmail, password, hwid } = req.body;
+router.post('/login', rateLimit_1.authLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureUserSchema)();
+    const { usernameOrEmail, password, hwid, turnstileToken } = req.body;
+    // Verify Turnstile token
+    const clientIp = req.headers['x-forwarded-for'] || req.ip;
+    const isTurnstileValid = await (0, turnstile_1.verifyTurnstileToken)(turnstileToken, clientIp);
+    if (!isTurnstileValid) {
+        return res.json({ success: false, message: 'Проверка безопасности не пройдена. Попробуйте снова.' });
+    }
     const result = await sql `
     SELECT id, username, email, password, subscription, subscription_end_date, registered_at, 
            is_admin, is_banned, email_verified, settings, avatar, hwid
@@ -20,7 +50,7 @@ router.post('/login', async (req, res) => {
         return res.json({ success: false, message: 'Неверный логин или пароль' });
     }
     const dbUser = result[0];
-    const isPasswordValid = await passwordsMatch({ id: dbUser.id, password: dbUser.password ?? null }, password);
+    const isPasswordValid = await (0, password_1.passwordsMatch)({ id: dbUser.id, password: dbUser.password ?? null }, password);
     if (!isPasswordValid) {
         return res.json({ success: false, message: 'Неверный логин или пароль' });
     }
@@ -31,13 +61,24 @@ router.post('/login', async (req, res) => {
         await sql `UPDATE users SET hwid = ${hwid} WHERE id = ${dbUser.id}`;
         dbUser.hwid = hwid;
     }
-    return res.json({ success: true, message: 'Вход выполнен!', data: mapUserFromDb(dbUser) });
+    return res.json({ success: true, message: 'Вход выполнен!', data: (0, userMapper_1.mapUserFromDb)(dbUser) });
 });
 // Register
-router.post('/register', async (req, res) => {
-    const sql = getDb();
-    await ensureUserSchema();
-    const { username, email, password, hwid } = req.body;
+router.post('/register', rateLimit_1.registerLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureUserSchema)();
+    const { username, email, password, hwid, turnstileToken } = req.body;
+    // Валидация надежности пароля
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+        return res.json({ success: false, message: passwordValidation.message });
+    }
+    // Verify Turnstile token
+    const clientIp = req.headers['x-forwarded-for'] || req.ip;
+    const isTurnstileValid = await (0, turnstile_1.verifyTurnstileToken)(turnstileToken, clientIp);
+    if (!isTurnstileValid) {
+        return res.json({ success: false, message: 'Проверка безопасности не пройдена. Попробуйте снова.' });
+    }
     const existingUser = await sql `
     SELECT * FROM users WHERE username = ${username} OR email = ${email}
   `;
@@ -47,19 +88,20 @@ router.post('/register', async (req, res) => {
             return res.json({ success: false, message: 'Пользователь с таким логином уже существует' });
         }
         if (existing.email === email) {
-            return res.json({ success: false, message: 'Email уже зарегистрирован' });
+            // Не раскрываем, что email существует - возвращаем общее сообщение
+            return res.json({ success: true, message: 'Если email доступен, код подтверждения будет отправлен' });
         }
     }
-    const verificationCode = generateVerificationCode();
+    const verificationCode = (0, email_1.generateVerificationCode)();
     const codeExpires = new Date(Date.now() + 10 * 60 * 1000);
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await (0, password_1.hashPassword)(password);
     const result = await sql `
     INSERT INTO users (username, email, password, verification_code, verification_code_expires, email_verified, hwid) 
     VALUES (${username}, ${email}, ${hashedPassword}, ${verificationCode}, ${codeExpires}, false, ${hwid}) 
     RETURNING id, username, email, subscription, subscription_end_date, registered_at, is_admin, is_banned, email_verified, settings, avatar, hwid
   `;
-    const user = mapUserFromDb(result[0]);
-    const emailSent = await sendVerificationEmail(email, username, verificationCode);
+    const user = (0, userMapper_1.mapUserFromDb)(result[0]);
+    const emailSent = await (0, email_1.sendVerificationEmail)(email, username, verificationCode);
     if (!emailSent) {
         await sql `DELETE FROM users WHERE id = ${result[0].id}`;
         return res.json({ success: false, message: 'Ошибка отправки кода. Попробуйте позже.' });
@@ -72,8 +114,8 @@ router.post('/register', async (req, res) => {
     });
 });
 // Resend code
-router.post('/resend-code', async (req, res) => {
-    const sql = getDb();
+router.post('/resend-code', rateLimit_1.emailLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
     const { userId } = req.body;
     if (!userId) {
         return res.json({ success: false, message: 'Не указан ID пользователя' });
@@ -86,20 +128,20 @@ router.post('/resend-code', async (req, res) => {
     if (user.email_verified) {
         return res.json({ success: false, message: 'Email уже подтвержден' });
     }
-    const verificationCode = generateVerificationCode();
+    const verificationCode = (0, email_1.generateVerificationCode)();
     const codeExpires = new Date(Date.now() + 10 * 60 * 1000);
     await sql `
     UPDATE users SET verification_code = ${verificationCode}, verification_code_expires = ${codeExpires} WHERE id = ${userId}
   `;
-    const emailSent = await sendVerificationEmail(user.email, user.username, verificationCode);
+    const emailSent = await (0, email_1.sendVerificationEmail)(user.email, user.username, verificationCode);
     if (emailSent) {
         return res.json({ success: true, message: 'Новый код отправлен на email' });
     }
     return res.json({ success: false, message: 'Ошибка отправки кода' });
 });
 // Verify code
-router.post('/verify-code', async (req, res) => {
-    const sql = getDb();
+router.post('/verify-code', rateLimit_1.verifyCodeLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
     const { userId, code } = req.body;
     if (!userId || !code) {
         return res.json({ success: false, message: 'Не указан ID пользователя или код' });
@@ -121,32 +163,34 @@ router.post('/verify-code', async (req, res) => {
     return res.json({ success: true, message: 'Email успешно подтвержден!' });
 });
 // Forgot password
-router.post('/forgot-password', async (req, res) => {
-    const sql = getDb();
-    await ensureUserSchema();
+router.post('/forgot-password', rateLimit_1.forgotPasswordLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
+    await (0, db_1.ensureUserSchema)();
     const { email } = req.body;
     if (!email) {
         return res.json({ success: false, message: 'Укажите email' });
     }
     const result = await sql `SELECT * FROM users WHERE email = ${email}`;
+    // Всегда возвращаем успех, чтобы не раскрывать существование email
     if (result.length === 0) {
-        return res.json({ success: false, message: 'Пользователь с таким email не найден' });
+        return res.json({ success: true, message: 'Если email существует в системе, код отправлен' });
     }
     const user = result[0];
-    const resetCode = generateVerificationCode();
+    const resetCode = (0, email_1.generateVerificationCode)();
     const codeExpires = new Date(Date.now() + 10 * 60 * 1000);
     await sql `
     UPDATE users SET reset_code = ${resetCode}, reset_code_expires = ${codeExpires} WHERE id = ${user.id}
   `;
-    const emailSent = await sendPasswordResetEmail(email, user.username, resetCode);
+    const emailSent = await (0, email_1.sendPasswordResetEmail)(email, user.username, resetCode);
     if (emailSent) {
-        return res.json({ success: true, message: 'Код отправлен на email', userId: user.id });
+        return res.json({ success: true, message: 'Если email существует в системе, код отправлен', userId: user.id });
     }
-    return res.json({ success: false, message: 'Ошибка отправки кода' });
+    // Даже при ошибке отправки не раскрываем детали
+    return res.json({ success: true, message: 'Если email существует в системе, код отправлен' });
 });
 // Verify reset code
-router.post('/verify-reset-code', async (req, res) => {
-    const sql = getDb();
+router.post('/verify-reset-code', rateLimit_1.verifyCodeLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
     const { userId, code } = req.body;
     if (!userId || !code) {
         return res.json({ success: false, message: 'Не указан ID пользователя или код' });
@@ -168,14 +212,16 @@ router.post('/verify-reset-code', async (req, res) => {
     return res.json({ success: true, message: 'Код подтвержден' });
 });
 // Reset password
-router.post('/reset-password', async (req, res) => {
-    const sql = getDb();
+router.post('/reset-password', rateLimit_1.verifyCodeLimiter, async (req, res) => {
+    const sql = (0, db_1.getDb)();
     const { userId, code, newPassword } = req.body;
     if (!userId || !code || !newPassword) {
         return res.json({ success: false, message: 'Заполните все поля' });
     }
-    if (newPassword.length < 6) {
-        return res.json({ success: false, message: 'Пароль должен быть минимум 6 символов' });
+    // Валидация надежности пароля
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
+        return res.json({ success: false, message: passwordValidation.message });
     }
     const result = await sql `SELECT * FROM users WHERE id = ${userId}`;
     if (result.length === 0) {
@@ -188,7 +234,7 @@ router.post('/reset-password', async (req, res) => {
     if (new Date() > new Date(user.reset_code_expires)) {
         return res.json({ success: false, message: 'Код истек' });
     }
-    const hashedPassword = await hashPassword(newPassword);
+    const hashedPassword = await (0, password_1.hashPassword)(newPassword);
     await sql `
     UPDATE users SET password = ${hashedPassword}, reset_code = NULL, reset_code_expires = NULL WHERE id = ${userId}
   `;
@@ -197,8 +243,8 @@ router.post('/reset-password', async (req, res) => {
 // Health check endpoint for auth service
 router.get('/check', async (_req, res) => {
     try {
-        const sql = getDb();
-        await ensureUserSchema();
+        const sql = (0, db_1.getDb)();
+        // Простой пинг БД без тяжёлых операций миграции
         await sql `SELECT 1`;
         return res.json({
             status: 'ok',
@@ -207,7 +253,7 @@ router.get('/check', async (_req, res) => {
         });
     }
     catch (error) {
-        console.error('Auth check error:', error);
+        logger_1.logger.error('Auth health check failed');
         return res.status(500).json({
             status: 'error',
             service: 'auth',
@@ -216,4 +262,4 @@ router.get('/check', async (_req, res) => {
         });
     }
 });
-export default router;
+exports.default = router;

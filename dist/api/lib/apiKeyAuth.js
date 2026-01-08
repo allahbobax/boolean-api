@@ -1,0 +1,90 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.apiKeyAuth = apiKeyAuth;
+exports.adminOnly = adminOnly;
+const crypto_1 = __importDefault(require("crypto"));
+// API Key для внутренних запросов (сайт, лаунчер)
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+/**
+ * Безопасное сравнение строк, защищенное от timing attacks
+ */
+function timingSafeCompare(provided, expected) {
+    if (!provided || !expected)
+        return false;
+    const providedBuf = Buffer.from(provided, 'utf8');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    if (providedBuf.length !== expectedBuf.length) {
+        // Добавляем фиктивное сравнение для защиты от timing
+        crypto_1.default.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
+        return false;
+    }
+    return crypto_1.default.timingSafeEqual(providedBuf, expectedBuf);
+}
+// Публичные роуты которые не требуют API ключа
+const PUBLIC_ROUTES = [
+    '/health',
+    '/auth/login',
+    '/auth/register',
+    '/auth/verify-code',
+    '/auth/resend-code',
+    '/auth/verify-email',
+    '/auth/resend-verification',
+    '/auth/forgot-password',
+    '/auth/verify-reset-code',
+    '/auth/reset-password',
+    '/auth/check', // health check для status page
+    '/oauth',
+    '/status',
+    '/incidents', // публичный для status page
+];
+// Роуты которые требуют только авторизацию пользователя (JWT), но не API ключ
+const USER_AUTH_ROUTES = [
+    '/auth/me',
+    '/auth/logout',
+    '/friends',
+    '/client',
+];
+function apiKeyAuth(req, res, next) {
+    const path = req.path;
+    // Логируем для отладки
+    console.log(`[apiKeyAuth] Path: ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
+    // Пропускаем публичные роуты
+    if (PUBLIC_ROUTES.some(route => path.startsWith(route))) {
+        return next();
+    }
+    // Пропускаем роуты которые защищены JWT авторизацией
+    if (USER_AUTH_ROUTES.some(route => path.startsWith(route))) {
+        return next();
+    }
+    // Для остальных роутов требуем API ключ
+    const apiKey = req.headers['x-api-key'];
+    if (!INTERNAL_API_KEY) {
+        console.error('INTERNAL_API_KEY not configured in environment!');
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied - server not configured'
+        });
+    }
+    if (!apiKey || !timingSafeCompare(apiKey, INTERNAL_API_KEY)) {
+        console.log(`[apiKeyAuth] Access denied for path: ${path}`);
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+        });
+    }
+    next();
+}
+// Middleware для админских роутов (требует и API ключ и проверку админа)
+function adminOnly(req, res, next) {
+    const apiKey = req.headers['x-api-key'];
+    if (!INTERNAL_API_KEY || !apiKey || !timingSafeCompare(apiKey, INTERNAL_API_KEY)) {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+        });
+    }
+    next();
+}
