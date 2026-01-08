@@ -156,5 +156,4 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 });
 
 // Vercel serverless handler
-module.exports = app;
 export default app;
