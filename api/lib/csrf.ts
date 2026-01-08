@@ -61,9 +61,28 @@ export async function validateCsrfToken(sessionId: string, token: string): Promi
   }
 }
 
+// Публичные роуты которые не требуют CSRF защиты
+const CSRF_EXEMPT_ROUTES = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-code',
+  '/auth/resend-code',
+  '/auth/verify-email',
+  '/auth/resend-verification',
+  '/auth/forgot-password',
+  '/auth/verify-reset-code',
+  '/auth/reset-password',
+];
+
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   // Skip CSRF for GET, HEAD, OPTIONS
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  // Skip CSRF for exempt routes (public auth endpoints)
+  if (CSRF_EXEMPT_ROUTES.includes(req.path)) {
+    console.log(`[csrfProtection] CSRF exempt route: ${req.method} ${req.path}`);
     return next();
   }
 
