@@ -27,6 +27,9 @@ const PUBLIC_ROUTES = [
   '/', // корневой эндпоинт
   '/csrf-token', // CSRF токен
   '/health',
+  '/health/ping', // health check для status page
+  '/health/site', // health check для status page
+  '/health/launcher', // health check для status page
   '/auth/login',
   '/auth/register',
   '/auth/verify-code',
