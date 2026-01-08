@@ -1,4 +1,3 @@
-import { Resend } from 'resend';
 import crypto from 'crypto';
 import { logger } from './logger';
 
@@ -7,10 +6,6 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 if (!RESEND_API_KEY) {
   logger.error('RESEND_API_KEY not configured in environment');
 }
-
-// Для EU региона нужно установить переменную окружения RESEND_BASE_URL
-// или использовать API ключ, который автоматически определяет регион
-const resend = new Resend(RESEND_API_KEY || 're_UymLriaL_9mVm5gLZGdebr1rENH37Agcx');
 
 export function generateVerificationCode(): string {
   // Криптографически стойкая генерация 6-значного кода
@@ -21,47 +16,61 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@booleanclient.ru';
   
   try {
-    if (!RESEND_API_KEY || !resend) {
-      logger.error('RESEND_API_KEY is not set or Resend client not initialized');
+    if (!RESEND_API_KEY) {
+      logger.error('RESEND_API_KEY is not set');
       return false;
     }
     
-    logger.info('Attempting to send email', { from: fromEmail, to, subject });
+    logger.info('Attempting to send email via direct HTTP', { from: fromEmail, to, subject });
     
-    // Добавляем таймаут для запроса
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000);
+    // Используем прямой HTTP запрос вместо Resend SDK
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [to],
+        subject: subject,
+        html: html,
+      }),
     });
-    
-    const sendPromise = resend.emails.send({
-      from: fromEmail,
-      to,
-      subject,
-      html,
+
+    const responseText = await response.text();
+    logger.info('Resend API response', { 
+      status: response.status, 
+      statusText: response.statusText,
+      body: responseText 
     });
-    
-    const result = await Promise.race([sendPromise, timeoutPromise]);
-    
-    // Проверяем, что письмо действительно отправлено
-    if (result.error) {
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch {
+        errorData = { message: responseText };
+      }
+      
       logger.error('Resend API returned error', { 
         to, 
         subject,
-        error: result.error,
-        errorName: result.error.name,
-        errorMessage: result.error.message,
-        statusCode: result.error.statusCode,
-        fullResult: JSON.stringify(result)
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
       });
       return false;
     }
+
+    const result = JSON.parse(responseText);
     
-    if (!result.data || !result.data.id) {
-      logger.error('Resend API returned no data', { to, subject, result });
+    if (!result.id) {
+      logger.error('Resend API returned no ID', { to, subject, result });
       return false;
     }
     
-    logger.info('Email sent successfully', { to, subject, id: result.data.id });
+    logger.info('Email sent successfully', { to, subject, id: result.id });
     return true;
   } catch (error: any) {
     logger.error('Email sending failed', { 
@@ -69,7 +78,6 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       to,
       from: fromEmail,
       error: error instanceof Error ? error.message : 'Unknown error',
-      statusCode: error?.statusCode,
       name: error?.name,
       message: error?.message,
       stack: error?.stack
