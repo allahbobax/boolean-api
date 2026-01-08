@@ -48,6 +48,28 @@ const allowedOriginPatterns = [
   /^https:\/\/.*\.booleanclient\.ru$/,
 ];
 
+function isOriginAllowed(origin: string | undefined): string | false {
+  if (!origin) return false;
+  const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
+  return isAllowed ? origin : false;
+}
+
+// Manual preflight handler BEFORE any other middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigin = isOriginAllowed(origin);
+  
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  
+  res.status(204).end();
+});
+
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     // Allow requests without origin (direct browser access, curl, etc.)
@@ -70,9 +92,6 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly with same CORS config
-app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(cookieParser());
