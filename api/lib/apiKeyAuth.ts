@@ -24,6 +24,8 @@ function timingSafeCompare(provided: string, expected: string): boolean {
 
 // Публичные роуты которые не требуют API ключа
 const PUBLIC_ROUTES = [
+  '/', // корневой эндпоинт
+  '/csrf-token', // CSRF токен
   '/health',
   '/auth/login',
   '/auth/register',

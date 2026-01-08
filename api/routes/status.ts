@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { getDb } from '../lib/db';
+import { logger } from '../lib/logger';
 
 const router = Router();
+
+// API ключ для статус-страницы (опциональный, для дополнительной безопасности)
+const STATUS_PAGE_API_KEY = process.env.STATUS_PAGE_API_KEY;
 
 // In-memory cache for live check results (to avoid hammering external services)
 let liveCheckCache: {
@@ -129,8 +133,21 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /status/check - Run a check and save to DB (called by cron or status page)
-router.post('/check', async (_req: Request, res: Response) => {
+router.post('/check', async (req: Request, res: Response) => {
   try {
+    // БЕЗОПАСНОСТЬ: Опциональная проверка API ключа для статус-страницы
+    // Если ключ настроен, проверяем его. Если нет - разрешаем доступ (для обратной совместимости)
+    if (STATUS_PAGE_API_KEY) {
+      const providedKey = req.headers['x-api-key'] as string;
+      if (providedKey !== STATUS_PAGE_API_KEY) {
+        logger.warn('Unauthorized status check attempt', { ip: req.ip });
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Access denied' 
+        });
+      }
+    }
+
     // Check cache first
     const now = Date.now();
     if (liveCheckCache.data && (now - liveCheckCache.timestamp) < CACHE_DURATION) {

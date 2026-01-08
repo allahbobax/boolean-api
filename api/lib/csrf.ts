@@ -2,30 +2,63 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
 
-// Инициализация Redis клиента
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Проверка наличия переменных окружения для Redis
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!REDIS_URL || !REDIS_TOKEN) {
+  console.error('⚠️  WARNING: UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured!');
+  console.error('⚠️  CSRF protection will be DISABLED. This is not recommended for production.');
+}
+
+// Инициализация Redis клиента (только если переменные заданы)
+const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
+  url: REDIS_URL,
+  token: REDIS_TOKEN,
+}) : null;
 
 const CSRF_TOKEN_TTL = 3600; // 1 час в секундах
 
 export async function generateCsrfToken(sessionId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex');
+  
+  // Если Redis не настроен, просто возвращаем токен (не сохраняем)
+  if (!redis) {
+    console.warn('CSRF token generated but not stored (Redis not configured)');
+    return token;
+  }
+  
   const key = `csrf:${sessionId}`;
   
-  // Сохраняем токен в Redis с TTL
-  await redis.setex(key, CSRF_TOKEN_TTL, token);
+  try {
+    // Сохраняем токен в Redis с TTL
+    await redis.setex(key, CSRF_TOKEN_TTL, token);
+  } catch (error) {
+    console.error('Failed to store CSRF token:', error);
+  }
   
   return token;
 }
 
 export async function validateCsrfToken(sessionId: string, token: string): Promise<boolean> {
-  const key = `csrf:${sessionId}`;
-  const stored = await redis.get<string>(key);
+  // Если Redis не настроен, пропускаем валидацию
+  if (!redis) {
+    console.warn('CSRF validation skipped (Redis not configured)');
+    return true;
+  }
   
-  if (!stored) return false;
-  return stored === token;
+  const key = `csrf:${sessionId}`;
+  
+  try {
+    const stored = await redis.get<string>(key);
+    
+    if (!stored) return false;
+    return stored === token;
+  } catch (error) {
+    console.error('CSRF validation error:', error);
+    // В случае ошибки пропускаем (fail-open для доступности)
+    return true;
+  }
 }
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {

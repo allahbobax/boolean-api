@@ -7,11 +7,20 @@ import { Request, Response, NextFunction } from 'express';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
-// Инициализация Redis клиента
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Проверка наличия переменных окружения для Redis
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!REDIS_URL || !REDIS_TOKEN) {
+  console.error('⚠️  WARNING: UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured!');
+  console.error('⚠️  Rate limiting will be DISABLED. This is not recommended for production.');
+}
+
+// Инициализация Redis клиента (только если переменные заданы)
+const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
+  url: REDIS_URL,
+  token: REDIS_TOKEN,
+}) : null;
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -23,6 +32,9 @@ function getClientIp(req: Request): string {
 
 // Создание rate limiter с Upstash
 function createUpstashLimiter(requests: number, windowSeconds: number) {
+  if (!redis) {
+    return null; // Возвращаем null если Redis не настроен
+  }
   return new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(requests, `${windowSeconds} s`),
@@ -32,9 +44,20 @@ function createUpstashLimiter(requests: number, windowSeconds: number) {
 }
 
 // Middleware для применения rate limiting
-function createRateLimitMiddleware(limiter: Ratelimit, identifier?: string) {
+function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    // Если Redis не настроен, пропускаем rate limiting
+    if (!limiter) {
+      return next();
+    }
+
     try {
+      // БЕЗОПАСНОСТЬ: Исключаем статус-страницу из rate limiting
+      // Статус-страница должна всегда работать для мониторинга
+      if (req.path.startsWith('/status')) {
+        return next();
+      }
+
       const ip = getClientIp(req);
       const key = identifier ? `${identifier}:${ip}` : ip;
       

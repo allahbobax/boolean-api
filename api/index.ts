@@ -24,6 +24,40 @@ import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
 
+// Проверка критичных переменных окружения
+const REQUIRED_ENV_VARS = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'INTERNAL_API_KEY',
+];
+
+const OPTIONAL_ENV_VARS = [
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN',
+  'RESEND_API_KEY',
+  'TURNSTILE_SECRET_KEY',
+];
+
+console.log('🔍 Checking environment variables...');
+
+const missingRequired = REQUIRED_ENV_VARS.filter(key => !process.env[key]);
+if (missingRequired.length > 0) {
+  console.error('❌ CRITICAL: Missing required environment variables:');
+  missingRequired.forEach(key => console.error(`   - ${key}`));
+  console.error('⚠️  Application may not function correctly!');
+}
+
+const missingOptional = OPTIONAL_ENV_VARS.filter(key => !process.env[key]);
+if (missingOptional.length > 0) {
+  console.warn('⚠️  WARNING: Missing optional environment variables:');
+  missingOptional.forEach(key => console.warn(`   - ${key}`));
+  console.warn('⚠️  Some features may be disabled.');
+}
+
+if (missingRequired.length === 0 && missingOptional.length === 0) {
+  console.log('✅ All environment variables configured');
+}
+
 const app = express();
 
 // Warm up DB connection early (non-blocking)
