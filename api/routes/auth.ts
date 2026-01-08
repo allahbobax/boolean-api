@@ -164,7 +164,12 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
     }
     if (existing.email === email) {
       // Не раскрываем, что email существует - возвращаем общее сообщение
-      return res.json({ success: true, message: 'Если email доступен, код подтверждения будет отправлен' });
+      // НО возвращаем requiresVerification чтобы показать модалку (хотя код не отправится)
+      return res.json({ 
+        success: true, 
+        message: 'Если email доступен, код подтверждения будет отправлен',
+        requiresVerification: false // Не показываем модалку для существующего email
+      });
     }
   }
 
