@@ -155,5 +155,6 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// Для Vercel serverless функций
+// Vercel serverless handler
+module.exports = app;
 export default app;

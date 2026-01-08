@@ -1,2 +1,3 @@
-// Точка входа для Vercel serverless функций
-export { default } from './api/index';
+// Vercel entry point - re-exports the Express app
+import app from './api/index';
+export default app;
