@@ -56,6 +56,11 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   const path = req.path;
   const method = req.method;
   
+  // Пропускаем preflight (OPTIONS) запросы - они обрабатываются CORS middleware
+  if (method === 'OPTIONS') {
+    return next();
+  }
+  
   // Логируем для отладки
   console.log(`[apiKeyAuth] ${method} ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
   
