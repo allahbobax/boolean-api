@@ -85,7 +85,6 @@ Vercel автоматически задеплоит изменения.
 backend-vercel/
 ├── api/
 │   ├── index.ts          # Express приложение (экспортируется для Vercel)
-│   ├── server.ts         # Локальный сервер для разработки
 │   ├── lib/              # Утилиты и middleware
 │   └── routes/           # API роуты
 ├── vercel.json           # Конфигурация Vercel (упрощенная)
@@ -93,3 +92,5 @@ backend-vercel/
 ```
 
 Vercel автоматически создает serverless функцию из `api/index.ts` благодаря экспорту Express app.
+
+**Важно:** Build скрипт не нужен - Vercel сам компилирует TypeScript файлы при деплое.
