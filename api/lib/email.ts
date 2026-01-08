@@ -1,31 +1,28 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import crypto from 'crypto';
 import { logger } from './logger';
+
+const resend = new Resend('re_UymLriaL_9mVm5gLZGdebr1rENH37Agcx');
 
 export function generateVerificationCode(): string {
   // Криптографически стойкая генерация 6-значного кода
   return crypto.randomInt(100000, 1000000).toString();
 }
 
-function getTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
-    const transporter = getTransporter();
-    await transporter.sendMail({ from: process.env.SMTP_FROM, to, subject, html });
+    const fromEmail = 'noreply@booleanclient.ru';
+    
+    await resend.emails.send({
+      from: fromEmail,
+      to,
+      subject,
+      html,
+    });
+    
     return true;
   } catch (error) {
-    logger.error('Email sending failed', { subject });
+    logger.error('Email sending failed', { subject, error: error instanceof Error ? error.message : 'Unknown error' });
     return false;
   }
 }
@@ -36,7 +33,9 @@ export async function sendPasswordResetEmail(email: string, username: string, re
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;margin:0;padding:24px;color:#fff}
     .container{max-width:500px;margin:0 auto;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px}
     .header{background:#000;padding:32px 24px;text-align:center;border-bottom:1px solid #1a1a1a}
-    .logo{font-size:20px;font-weight:600;color:#fff;letter-spacing:2px}
+    .logo-container{display:flex;align-items:center;justify-content:center;gap:12px}
+    .logo-img{width:32px;height:32px;object-fit:contain}
+    .logo{font-size:20px;font-weight:600;color:#fff;letter-spacing:2px;margin:0}
     .content{padding:40px 24px;text-align:center}
     .title{font-size:18px;font-weight:500;color:#fff;margin:0 0 16px}
     .description{font-size:15px;line-height:1.5;color:#888;margin:0 0 32px}
@@ -46,7 +45,12 @@ export async function sendPasswordResetEmail(email: string, username: string, re
     .footer{padding:24px;text-align:center;color:#666;font-size:12px;border-top:1px solid #1a1a1a}
     </style></head><body>
     <div class="container">
-      <div class="header"><h1 class="logo">BOOLEAN CLIENT</h1></div>
+      <div class="header">
+        <div class="logo-container">
+          <img src="https://booleanclient.ru/icon.png" alt="Logo" class="logo-img" />
+          <h1 class="logo">BOOLEAN CLIENT</h1>
+        </div>
+      </div>
       <div class="content">
         <h2 class="title">Сброс пароля</h2>
         <p class="description">Привет, ${username}! Вы запросили сброс пароля.</p>
@@ -64,7 +68,9 @@ export async function sendVerificationEmail(email: string, username: string, ver
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;margin:0;padding:24px;color:#fff}
     .container{max-width:500px;margin:0 auto;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px}
     .header{background:#000;padding:32px 24px;text-align:center;border-bottom:1px solid #1a1a1a}
-    .logo{font-size:20px;font-weight:600;color:#fff;letter-spacing:2px}
+    .logo-container{display:flex;align-items:center;justify-content:center;gap:12px}
+    .logo-img{width:32px;height:32px;object-fit:contain}
+    .logo{font-size:20px;font-weight:600;color:#fff;letter-spacing:2px;margin:0}
     .content{padding:40px 24px;text-align:center}
     .title{font-size:18px;font-weight:500;color:#fff;margin:0 0 16px}
     .description{font-size:15px;line-height:1.5;color:#888;margin:0 0 32px}
@@ -74,7 +80,12 @@ export async function sendVerificationEmail(email: string, username: string, ver
     .footer{padding:24px;text-align:center;color:#666;font-size:12px;border-top:1px solid #1a1a1a}
     </style></head><body>
     <div class="container">
-      <div class="header"><h1 class="logo">BOOLEAN CLIENT</h1></div>
+      <div class="header">
+        <div class="logo-container">
+          <img src="https://booleanclient.ru/icon.png" alt="Logo" class="logo-img" />
+          <h1 class="logo">BOOLEAN CLIENT</h1>
+        </div>
+      </div>
       <div class="content">
         <h2 class="title">Код подтверждения</h2>
         <p class="description">Код отправлен на ${email}</p>
