@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { warmupDb } from './lib/db';
@@ -59,6 +58,9 @@ app.options('*', (req, res) => {
   const origin = req.headers.origin;
   const allowedOrigin = isOriginAllowed(origin);
   
+  // Always set Vary header for proper caching
+  res.setHeader('Vary', 'Origin');
+  
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -70,28 +72,21 @@ app.options('*', (req, res) => {
   res.status(204).end();
 });
 
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests without origin (direct browser access, curl, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
-    const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
-    if (isAllowed) {
-      callback(null, origin);
-    } else {
-      // Log rejected origins for debugging
-      logger.warn('CORS rejected', { origin });
-      callback(new Error('CORS not allowed'), false);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400
-};
-
-app.use(cors(corsOptions));
+// Add CORS headers to ALL responses (including non-preflight)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowedOrigin = isOriginAllowed(origin);
+  
+  // Always set Vary for proper caching with different origins
+  res.setHeader('Vary', 'Origin');
+  
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  next();
+});
 
 app.use(express.json());
 app.use(cookieParser());
