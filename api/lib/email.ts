@@ -35,7 +35,24 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       html,
     });
     
-    logger.info('Email sent successfully', { to, subject, id: result.data?.id });
+    // Проверяем, что письмо действительно отправлено
+    if (result.error) {
+      logger.error('Resend API returned error', { 
+        to, 
+        subject,
+        error: result.error,
+        statusCode: result.error.statusCode,
+        message: result.error.message
+      });
+      return false;
+    }
+    
+    if (!result.data || !result.data.id) {
+      logger.error('Resend API returned no data', { to, subject, result });
+      return false;
+    }
+    
+    logger.info('Email sent successfully', { to, subject, id: result.data.id });
     return true;
   } catch (error: any) {
     logger.error('Email sending failed', { 
