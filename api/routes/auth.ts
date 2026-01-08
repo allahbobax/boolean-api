@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import type { User } from '../types';
-import { getDb, ensureUserSchema } from '../lib/db';
+import { getDb } from '../lib/db';
 import { hashPassword, passwordsMatch } from '../lib/password';
 import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
 import { mapUserFromDb } from '../lib/userMapper';
@@ -33,25 +33,27 @@ function validatePassword(password: string): { valid: boolean; message?: string 
 // Login
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
-  await ensureUserSchema();
+  // УБРАНО: ensureUserSchema() - схема должна создаваться при деплое, не на каждый запрос
   
   const { usernameOrEmail, password, hwid, turnstileToken } = req.body;
-
-  // Verify Turnstile token
   const clientIp = req.headers['x-forwarded-for'] as string || req.ip;
-  const isTurnstileValid = await verifyTurnstileToken(turnstileToken, clientIp);
+
+  // ОПТИМИЗАЦИЯ: Запускаем Turnstile и DB запрос ПАРАЛЛЕЛЬНО
+  const [isTurnstileValid, result] = await Promise.all([
+    verifyTurnstileToken(turnstileToken, clientIp),
+    sql<User[]>`
+      SELECT id, username, email, password, subscription, subscription_end_date, registered_at, 
+             is_admin, is_banned, email_verified, settings, avatar, hwid,
+             failed_login_attempts, account_locked_until, last_failed_login
+      FROM users 
+      WHERE username = ${usernameOrEmail} OR email = ${usernameOrEmail}
+      LIMIT 1
+    `
+  ]);
+
   if (!isTurnstileValid) {
     return res.json({ success: false, message: 'Проверка безопасности не пройдена. Попробуйте снова.' });
   }
-
-  const result = await sql<User[]>`
-    SELECT id, username, email, password, subscription, subscription_end_date, registered_at, 
-           is_admin, is_banned, email_verified, settings, avatar, hwid,
-           failed_login_attempts, account_locked_until, last_failed_login
-    FROM users 
-    WHERE username = ${usernameOrEmail} OR email = ${usernameOrEmail}
-    LIMIT 1
-  `;
 
   if (result.length === 0) {
     return res.json({ success: false, message: 'Неверный логин или пароль' });
@@ -136,7 +138,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 // Register
 router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
-  await ensureUserSchema();
+  // УБРАНО: ensureUserSchema() - схема должна создаваться при деплое, не на каждый запрос
   
   const { username, email, password, hwid, turnstileToken } = req.body;
 
@@ -268,7 +270,7 @@ router.post('/verify-code', verifyCodeLimiter, async (req: Request, res: Respons
 // Forgot password
 router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   const sql = getDb();
-  await ensureUserSchema();
+  // УБРАНО: ensureUserSchema() - схема должна создаваться при деплое, не на каждый запрос
   
   const { email } = req.body;
 

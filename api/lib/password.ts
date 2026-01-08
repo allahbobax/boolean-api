@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { getDb } from './db';
 import crypto from 'crypto';
 
-const SALT_ROUNDS = 12; // Увеличиваем до 12 для лучшей безопасности
+const SALT_ROUNDS = 10; // Баланс безопасности и скорости для serverless (~100ms vs ~400ms при 12)
 
 export async function hashPassword(password: string): Promise<string> {
   // Проверяем минимальную длину пароля
