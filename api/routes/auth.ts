@@ -54,7 +54,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   `;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Неверный логин или пароль' });
+    return res.json({ success: false, message: 'Неверные учетные данные' });
   }
 
   const dbUser = result[0];
@@ -106,7 +106,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     const attemptsLeft = 5 - failedAttempts;
     return res.json({ 
       success: false, 
-      message: `Неверный логин или пароль. Осталось попыток: ${attemptsLeft}` 
+      message: `Неверные учетные данные. Осталось попыток: ${attemptsLeft}` 
     });
   }
 
@@ -160,11 +160,11 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
   if (existingUser.length > 0) {
     const existing = existingUser[0];
     if (existing.username === username) {
-      return res.json({ success: false, message: 'Пользователь с таким логином уже существует' });
+      return res.json({ success: false, message: 'Это имя пользователя недоступно' });
     }
     if (existing.email === email) {
       // Не раскрываем, что email существует - возвращаем общее сообщение
-      return res.json({ success: true, message: 'Если email доступен, код подтверждения будет отправлен' });
+      return res.json({ success: true, message: 'Если данные корректны, код подтверждения будет отправлен на email' });
     }
   }
 
@@ -188,7 +188,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 
   return res.json({
     success: true,
-    message: 'Код подтверждения отправлен на email',
+    message: 'Если данные корректны, код подтверждения будет отправлен на email',
     requiresVerification: true,
     data: user
   });
@@ -206,7 +206,7 @@ router.post('/resend-code', emailLimiter, async (req: Request, res: Response) =>
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Пользователь не найден' });
+    return res.json({ success: false, message: 'Неверные данные запроса' });
   }
 
   const user = result[0];
@@ -225,9 +225,9 @@ router.post('/resend-code', emailLimiter, async (req: Request, res: Response) =>
   const emailSent = await sendVerificationEmail(user.email, user.username, verificationCode);
 
   if (emailSent) {
-    return res.json({ success: true, message: 'Новый код отправлен на email' });
+    return res.json({ success: true, message: 'Если данные корректны, новый код отправлен на email' });
   }
-  return res.json({ success: false, message: 'Ошибка отправки кода' });
+  return res.json({ success: false, message: 'Ошибка отправки. Попробуйте позже' });
 });
 
 // Verify code
@@ -242,17 +242,17 @@ router.post('/verify-code', verifyCodeLimiter, async (req: Request, res: Respons
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Пользователь не найден' });
+    return res.json({ success: false, message: 'Неверные данные запроса' });
   }
 
   const user = result[0];
 
   if (new Date() > new Date(user.verification_code_expires!)) {
-    return res.json({ success: false, message: 'Код истек. Запросите новый код.' });
+    return res.json({ success: false, message: 'Код истек. Запросите новый код' });
   }
 
   if (user.verification_code !== code) {
-    return res.json({ success: false, message: 'Неверный код подтверждения' });
+    return res.json({ success: false, message: 'Неверный код' });
   }
 
   await sql`
@@ -309,17 +309,17 @@ router.post('/verify-reset-code', verifyCodeLimiter, async (req: Request, res: R
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Пользователь не найден' });
+    return res.json({ success: false, message: 'Неверные данные запроса' });
   }
 
   const user = result[0];
 
   if (!user.reset_code || !user.reset_code_expires) {
-    return res.json({ success: false, message: 'Код сброса не запрашивался' });
+    return res.json({ success: false, message: 'Неверные данные запроса' });
   }
 
   if (new Date() > new Date(user.reset_code_expires)) {
-    return res.json({ success: false, message: 'Код истек. Запросите новый код.' });
+    return res.json({ success: false, message: 'Код истек. Запросите новый код' });
   }
 
   if (user.reset_code !== code) {
@@ -347,13 +347,13 @@ router.post('/reset-password', verifyCodeLimiter, async (req: Request, res: Resp
   const result = await sql<User[]>`SELECT * FROM users WHERE id = ${userId}`;
 
   if (result.length === 0) {
-    return res.json({ success: false, message: 'Пользователь не найден' });
+    return res.json({ success: false, message: 'Неверные данные запроса' });
   }
 
   const user = result[0];
 
   if (!user.reset_code || user.reset_code !== code) {
-    return res.json({ success: false, message: 'Неверный код подтверждения' });
+    return res.json({ success: false, message: 'Неверный код' });
   }
 
   if (new Date() > new Date(user.reset_code_expires!)) {
