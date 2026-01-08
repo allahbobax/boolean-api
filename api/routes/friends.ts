@@ -10,8 +10,14 @@ router.get('/', async (req: Request, res: Response) => {
 
   const userId = req.query.userId as string;
 
-  if (!userId) {
-    return res.status(400).json({ success: false, message: 'userId required' });
+  if (!userId || userId === 'undefined' || userId === 'null') {
+    return res.status(400).json({ success: false, message: 'Valid userId required' });
+  }
+
+  // Проверяем что userId это число
+  const userIdNum = parseInt(userId);
+  if (isNaN(userIdNum)) {
+    return res.status(400).json({ success: false, message: 'userId must be a valid number' });
   }
 
   const result = await sql`
@@ -22,25 +28,25 @@ router.get('/', async (req: Request, res: Response) => {
       f.user_id,
       f.friend_id,
       CASE 
-        WHEN f.user_id = ${userId} THEN u2.id
+        WHEN f.user_id = ${userIdNum} THEN u2.id
         ELSE u1.id
       END as friend_user_id,
       CASE 
-        WHEN f.user_id = ${userId} THEN u2.username
+        WHEN f.user_id = ${userIdNum} THEN u2.username
         ELSE u1.username
       END as friend_username,
       CASE 
-        WHEN f.user_id = ${userId} THEN u2.avatar
+        WHEN f.user_id = ${userIdNum} THEN u2.avatar
         ELSE u1.avatar
       END as friend_avatar,
       CASE 
-        WHEN f.user_id = ${userId} THEN 'outgoing'
+        WHEN f.user_id = ${userIdNum} THEN 'outgoing'
         ELSE 'incoming'
       END as request_direction
     FROM friendships f
     JOIN users u1 ON f.user_id = u1.id
     JOIN users u2 ON f.friend_id = u2.id
-    WHERE f.user_id = ${userId} OR f.friend_id = ${userId}
+    WHERE f.user_id = ${userIdNum} OR f.friend_id = ${userIdNum}
     ORDER BY f.created_at DESC
   `;
 
@@ -55,21 +61,26 @@ router.post('/', async (req: Request, res: Response) => {
 
   const { userId, friendUsername, action, friendshipId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ success: false, message: 'userId required' });
+  if (!userId || userId === 'undefined' || userId === 'null') {
+    return res.status(400).json({ success: false, message: 'Valid userId required' });
+  }
+
+  const userIdNum = parseInt(userId);
+  if (isNaN(userIdNum)) {
+    return res.status(400).json({ success: false, message: 'userId must be a valid number' });
   }
 
   // Accept friend request
   if (action === 'accept') {
     await sql`
-      UPDATE friendships SET status = 'accepted' WHERE id = ${friendshipId} AND friend_id = ${userId}
+      UPDATE friendships SET status = 'accepted' WHERE id = ${friendshipId} AND friend_id = ${userIdNum}
     `;
     return res.json({ success: true, message: 'Friend request accepted' });
   }
 
   // Reject friend request
   if (action === 'reject') {
-    await sql`DELETE FROM friendships WHERE id = ${friendshipId} AND friend_id = ${userId}`;
+    await sql`DELETE FROM friendships WHERE id = ${friendshipId} AND friend_id = ${userIdNum}`;
     return res.json({ success: true, message: 'Friend request rejected' });
   }
 
@@ -88,20 +99,20 @@ router.post('/', async (req: Request, res: Response) => {
 
   const friendId = friendResult[0].id;
 
-  if (friendId === parseInt(userId)) {
+  if (friendId === userIdNum) {
     return res.status(400).json({ success: false, message: 'Cannot add yourself' });
   }
 
   const existingResult = await sql`
     SELECT * FROM friendships 
-    WHERE (user_id = ${userId} AND friend_id = ${friendId}) OR (user_id = ${friendId} AND friend_id = ${userId})
+    WHERE (user_id = ${userIdNum} AND friend_id = ${friendId}) OR (user_id = ${friendId} AND friend_id = ${userIdNum})
   `;
 
   if (existingResult.length > 0) {
     return res.status(400).json({ success: false, message: 'Friend request already exists' });
   }
 
-  await sql`INSERT INTO friendships (user_id, friend_id, status) VALUES (${userId}, ${friendId}, 'pending')`;
+  await sql`INSERT INTO friendships (user_id, friend_id, status) VALUES (${userIdNum}, ${friendId}, 'pending')`;
 
   return res.status(201).json({ success: true, message: 'Friend request sent' });
 });

@@ -1,11 +1,26 @@
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { logger } from './logger';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_FROM = process.env.SMTP_FROM || process.env.SMTP_USER;
 
-if (!RESEND_API_KEY) {
-  logger.error('RESEND_API_KEY not configured in environment');
+if (!SMTP_USER || !SMTP_PASS) {
+  logger.error('SMTP credentials not configured in environment');
 }
+
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+});
 
 export function generateVerificationCode(): string {
   // Криптографически стойкая генерация 6-значного кода
@@ -13,70 +28,28 @@ export function generateVerificationCode(): string {
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@booleanclient.ru';
-  
   try {
-    if (!RESEND_API_KEY) {
-      logger.error('RESEND_API_KEY is not set');
+    if (!SMTP_USER || !SMTP_PASS) {
+      logger.error('SMTP credentials are not set');
       return false;
     }
     
-    logger.info('Attempting to send email via direct HTTP', { from: fromEmail, to, subject });
+    logger.info('Attempting to send email via Gmail SMTP', { from: SMTP_FROM, to, subject });
     
-    // Используем прямой HTTP запрос вместо Resend SDK
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [to],
-        subject: subject,
-        html: html,
-      }),
+    const info = await transporter.sendMail({
+      from: SMTP_FROM,
+      to: to,
+      subject: subject,
+      html: html,
     });
 
-    const responseText = await response.text();
-    logger.info('Resend API response', { 
-      status: response.status, 
-      statusText: response.statusText,
-      body: responseText 
-    });
-
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { message: responseText };
-      }
-      
-      logger.error('Resend API returned error', { 
-        to, 
-        subject,
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData
-      });
-      return false;
-    }
-
-    const result = JSON.parse(responseText);
-    
-    if (!result.id) {
-      logger.error('Resend API returned no ID', { to, subject, result });
-      return false;
-    }
-    
-    logger.info('Email sent successfully', { to, subject, id: result.id });
+    logger.info('Email sent successfully', { to, subject, messageId: info.messageId });
     return true;
   } catch (error: any) {
     logger.error('Email sending failed', { 
       subject, 
       to,
-      from: fromEmail,
+      from: SMTP_FROM,
       error: error instanceof Error ? error.message : 'Unknown error',
       name: error?.name,
       message: error?.message,
