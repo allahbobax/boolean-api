@@ -35,27 +35,6 @@ const OPTIONAL_ENV_VARS = [
   'RESEND_API_KEY',
   'TURNSTILE_SECRET_KEY',
 ];
-
-console.log('🔍 Checking environment variables...');
-
-const missingRequired = REQUIRED_ENV_VARS.filter(key => !process.env[key]);
-if (missingRequired.length > 0) {
-  console.error('❌ CRITICAL: Missing required environment variables:');
-  missingRequired.forEach(key => console.error(`   - ${key}`));
-  console.error('⚠️  Application may not function correctly!');
-}
-
-const missingOptional = OPTIONAL_ENV_VARS.filter(key => !process.env[key]);
-if (missingOptional.length > 0) {
-  console.warn('⚠️  WARNING: Missing optional environment variables:');
-  missingOptional.forEach(key => console.warn(`   - ${key}`));
-  console.warn('⚠️  Some features may be disabled.');
-}
-
-if (missingRequired.length === 0 && missingOptional.length === 0) {
-  console.log('✅ All environment variables configured');
-}
-
 const app = express();
 
 // Warm up DB connection early (non-blocking)
@@ -69,7 +48,7 @@ const allowedOriginPatterns = [
   /^https:\/\/.*\.booleanclient\.ru$/,
 ];
 
-app.use(cors({
+const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     // Allow requests without origin (direct browser access, curl, etc.)
     if (!origin) {
@@ -88,10 +67,12 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   maxAge: 86400
-}));
+};
 
-// Handle preflight requests explicitly
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly with same CORS config
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(cookieParser());
