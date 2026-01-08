@@ -175,9 +175,11 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   logger.error('Server error', { 
     endpoint: req.path, 
     method: req.method,
-    ip: req.ip 
+    ip: req.ip,
+    error: err.message
   });
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
+// Для Vercel serverless функций
 export default app;
