@@ -21,19 +21,26 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@booleanclient.ru';
   
   try {
-    if (!RESEND_API_KEY) {
-      logger.error('RESEND_API_KEY is not set');
+    if (!RESEND_API_KEY || !resend) {
+      logger.error('RESEND_API_KEY is not set or Resend client not initialized');
       return false;
     }
     
     logger.info('Attempting to send email', { from: fromEmail, to, subject });
     
-    const result = await resend.emails.send({
+    // Добавляем таймаут для запроса
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000);
+    });
+    
+    const sendPromise = resend.emails.send({
       from: fromEmail,
       to,
       subject,
       html,
     });
+    
+    const result = await Promise.race([sendPromise, timeoutPromise]);
     
     // Проверяем, что письмо действительно отправлено
     if (result.error) {
@@ -41,8 +48,10 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
         to, 
         subject,
         error: result.error,
+        errorName: result.error.name,
+        errorMessage: result.error.message,
         statusCode: result.error.statusCode,
-        message: result.error.message
+        fullResult: JSON.stringify(result)
       });
       return false;
     }
