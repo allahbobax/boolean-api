@@ -2,7 +2,9 @@ import bcrypt from 'bcryptjs';
 import { getDb } from './db';
 import crypto from 'crypto';
 
-const SALT_ROUNDS = 6; // Оптимизировано для serverless (~15-25ms вместо ~100ms при 10)
+// БЕЗОПАСНОСТЬ: Увеличен cost factor до 10 (рекомендуемый минимум для 2026)
+// Компромисс между безопасностью и производительностью в serverless (~80-120ms)
+const SALT_ROUNDS = 10;
 
 export async function hashPassword(password: string): Promise<string> {
   // Проверяем минимальную длину пароля

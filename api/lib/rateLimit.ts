@@ -13,7 +13,7 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 if (!REDIS_URL || !REDIS_TOKEN) {
   console.error('⚠️  WARNING: UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured!');
-  console.error('⚠️  Rate limiting will be DISABLED. This is not recommended for production.');
+  console.error('⚠️  Rate limiting will use in-memory fallback.');
 }
 
 // Инициализация Redis клиента (только если переменные заданы)
@@ -21,6 +21,53 @@ const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
   url: REDIS_URL,
   token: REDIS_TOKEN,
 }) : null;
+
+// In-memory fallback rate limiter для случаев когда Redis недоступен
+// БЕЗОПАСНОСТЬ: Fail-closed вместо fail-open
+class InMemoryRateLimiter {
+  private requests: Map<string, { count: number; resetAt: number }> = new Map();
+  private readonly maxRequests: number;
+  private readonly windowMs: number;
+
+  constructor(maxRequests: number, windowSeconds: number) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowSeconds * 1000;
+    
+    // Очистка устаревших записей каждую минуту
+    setInterval(() => this.cleanup(), 60000);
+  }
+
+  private cleanup() {
+    const now = Date.now();
+    for (const [key, value] of this.requests.entries()) {
+      if (value.resetAt < now) {
+        this.requests.delete(key);
+      }
+    }
+  }
+
+  async limit(key: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
+    const now = Date.now();
+    const record = this.requests.get(key);
+
+    if (!record || record.resetAt < now) {
+      // Новое окно
+      const resetAt = now + this.windowMs;
+      this.requests.set(key, { count: 1, resetAt });
+      return { success: true, limit: this.maxRequests, remaining: this.maxRequests - 1, reset: resetAt };
+    }
+
+    if (record.count >= this.maxRequests) {
+      return { success: false, limit: this.maxRequests, remaining: 0, reset: record.resetAt };
+    }
+
+    record.count++;
+    return { success: true, limit: this.maxRequests, remaining: this.maxRequests - record.count, reset: record.resetAt };
+  }
+}
+
+// Fallback лимитеры (создаются лениво)
+const fallbackLimiters: Map<string, InMemoryRateLimiter> = new Map();
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for'];
@@ -44,13 +91,13 @@ function createUpstashLimiter(requests: number, windowSeconds: number) {
 }
 
 // Middleware для применения rate limiting
-function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: string) {
+function createRateLimitMiddleware(
+  limiter: Ratelimit | null, 
+  identifier: string = 'default',
+  maxRequests: number = 100,
+  windowSeconds: number = 60
+) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // Если Redis не настроен, пропускаем rate limiting
-    if (!limiter) {
-      return next();
-    }
-
     try {
       // БЕЗОПАСНОСТЬ: Исключаем статус-страницу из rate limiting
       // Статус-страница должна всегда работать для мониторинга
@@ -61,7 +108,22 @@ function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: strin
       const ip = getClientIp(req);
       const key = identifier ? `${identifier}:${ip}` : ip;
       
-      const { success, limit, remaining, reset } = await limiter.limit(key);
+      let result: { success: boolean; limit: number; remaining: number; reset: number };
+
+      if (limiter) {
+        // Используем Redis
+        result = await limiter.limit(key);
+      } else {
+        // БЕЗОПАСНОСТЬ: Используем in-memory fallback вместо пропуска
+        let fallback = fallbackLimiters.get(identifier);
+        if (!fallback) {
+          fallback = new InMemoryRateLimiter(maxRequests, windowSeconds);
+          fallbackLimiters.set(identifier, fallback);
+        }
+        result = await fallback.limit(key);
+      }
+
+      const { success, limit, remaining, reset } = result;
 
       // Устанавливаем заголовки
       res.set('X-RateLimit-Limit', String(limit));
@@ -82,7 +144,24 @@ function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: strin
       return next();
     } catch (error) {
       console.error('Rate limit error:', error);
-      // В случае ошибки Redis пропускаем запрос (fail-open)
+      // БЕЗОПАСНОСТЬ: Fail-closed - при ошибке используем fallback лимитер
+      let fallback = fallbackLimiters.get(identifier);
+      if (!fallback) {
+        fallback = new InMemoryRateLimiter(maxRequests, windowSeconds);
+        fallbackLimiters.set(identifier, fallback);
+      }
+      
+      const ip = getClientIp(req);
+      const key = identifier ? `${identifier}:${ip}` : ip;
+      const result = await fallback.limit(key);
+      
+      if (!result.success) {
+        return res.status(429).json({
+          success: false,
+          message: 'Слишком много запросов. Попробуйте позже.',
+        });
+      }
+      
       return next();
     }
   };
@@ -92,24 +171,24 @@ function createRateLimitMiddleware(limiter: Ratelimit | null, identifier?: strin
 
 // Аутентификация - 5 попыток за 40 секунд
 const authRateLimiter = createUpstashLimiter(5, 40);
-export const authLimiter = createRateLimitMiddleware(authRateLimiter, 'auth');
+export const authLimiter = createRateLimitMiddleware(authRateLimiter, 'auth', 5, 40);
 
 // Регистрация - 3 попытки за 40 секунд
 const registerRateLimiter = createUpstashLimiter(3, 40);
-export const registerLimiter = createRateLimitMiddleware(registerRateLimiter, 'register');
+export const registerLimiter = createRateLimitMiddleware(registerRateLimiter, 'register', 3, 40);
 
 // Email отправка - 1 письмо за 40 секунд
 const emailRateLimiter = createUpstashLimiter(1, 40);
-export const emailLimiter = createRateLimitMiddleware(emailRateLimiter, 'email');
+export const emailLimiter = createRateLimitMiddleware(emailRateLimiter, 'email', 1, 40);
 
 // Забыли пароль - 3 запроса за 40 секунд
 const forgotPasswordRateLimiter = createUpstashLimiter(3, 40);
-export const forgotPasswordLimiter = createRateLimitMiddleware(forgotPasswordRateLimiter, 'forgot');
+export const forgotPasswordLimiter = createRateLimitMiddleware(forgotPasswordRateLimiter, 'forgot', 3, 40);
 
 // Проверка кода - 10 попыток за 40 секунд
 const verifyCodeRateLimiter = createUpstashLimiter(10, 40);
-export const verifyCodeLimiter = createRateLimitMiddleware(verifyCodeRateLimiter, 'verify');
+export const verifyCodeLimiter = createRateLimitMiddleware(verifyCodeRateLimiter, 'verify', 10, 40);
 
 // Общий лимит - 100 запросов в минуту
 const generalRateLimiter = createUpstashLimiter(100, 60);
-export const generalLimiter = createRateLimitMiddleware(generalRateLimiter, 'general');
+export const generalLimiter = createRateLimitMiddleware(generalRateLimiter, 'general', 100, 60);

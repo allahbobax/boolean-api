@@ -71,6 +71,38 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 
+// Валидация входных данных
+const MAX_TITLE_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_MESSAGE_LENGTH = 2000;
+const VALID_SEVERITIES = ['minor', 'major', 'critical'];
+const VALID_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'];
+
+function validateIncidentInput(data: { title?: string; description?: string; severity?: string; status?: string; message?: string }): { valid: boolean; error?: string } {
+  if (data.title !== undefined) {
+    if (typeof data.title !== 'string' || data.title.length > MAX_TITLE_LENGTH) {
+      return { valid: false, error: `Title must be a string with max ${MAX_TITLE_LENGTH} characters` };
+    }
+  }
+  if (data.description !== undefined) {
+    if (typeof data.description !== 'string' || data.description.length > MAX_DESCRIPTION_LENGTH) {
+      return { valid: false, error: `Description must be a string with max ${MAX_DESCRIPTION_LENGTH} characters` };
+    }
+  }
+  if (data.message !== undefined) {
+    if (typeof data.message !== 'string' || data.message.length > MAX_MESSAGE_LENGTH) {
+      return { valid: false, error: `Message must be a string with max ${MAX_MESSAGE_LENGTH} characters` };
+    }
+  }
+  if (data.severity !== undefined && !VALID_SEVERITIES.includes(data.severity)) {
+    return { valid: false, error: `Severity must be one of: ${VALID_SEVERITIES.join(', ')}` };
+  }
+  if (data.status !== undefined && !VALID_STATUSES.includes(data.status)) {
+    return { valid: false, error: `Status must be one of: ${VALID_STATUSES.join(', ')}` };
+  }
+  return { valid: true };
+}
+
 // Create incident
 router.post('/', async (req: Request, res: Response) => {
   const sql = getDb();
@@ -85,6 +117,12 @@ router.post('/', async (req: Request, res: Response) => {
 
   if (!title) {
     return res.status(400).json({ success: false, message: 'Title is required' });
+  }
+
+  // БЕЗОПАСНОСТЬ: Валидация длины входных данных
+  const validation = validateIncidentInput({ title, description, severity });
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.error });
   }
 
   const result = await sql`
@@ -117,6 +155,12 @@ router.post('/update', async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
   }
 
+  // БЕЗОПАСНОСТЬ: Валидация входных данных
+  const validation = validateIncidentInput({ status, message });
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.error });
+  }
+
   await sql`
     INSERT INTO incident_updates (incident_id, status, message) VALUES (${incidentId}, ${status}, ${message})
   `;
@@ -139,6 +183,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
   if (!await isAdmin(userId)) {
     return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+
+  // БЕЗОПАСНОСТЬ: Валидация входных данных
+  const validation = validateIncidentInput({ title, description, severity, status });
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, message: validation.error });
   }
 
   const resolvedAt = status === 'resolved' ? new Date() : null;

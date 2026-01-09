@@ -105,10 +105,10 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     
     logger.warn('Failed login attempt', { userId: dbUser.id, attempts: failedAttempts, ip: clientIp });
     
-    const attemptsLeft = 5 - failedAttempts;
+    // БЕЗОПАСНОСТЬ: Не раскрываем количество оставшихся попыток
     return res.json({ 
       success: false, 
-      message: `Неверный логин или пароль. Осталось попыток: ${attemptsLeft}` 
+      message: 'Неверный логин или пароль' 
     });
   }
 
