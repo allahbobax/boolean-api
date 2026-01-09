@@ -36,6 +36,9 @@ const OPTIONAL_ENV_VARS = [
 ];
 const app = express();
 
+// Убираем X-Powered-By до всех middleware
+app.disable('x-powered-by');
+
 // Warm up DB connection early (non-blocking)
 warmupDb();
 
@@ -109,6 +112,9 @@ app.use(helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      baseUri: ["'self'"], // Защита от base tag injection
+      frameAncestors: ["'none'"], // Защита от ClickJacking (современная альтернатива X-Frame-Options)
+      formAction: ["'self'"], // Ограничение отправки форм
     }
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
