@@ -13,7 +13,8 @@ let liveCheckCache: {
   timestamp: number;
 } = { data: null, timestamp: 0 };
 
-const CACHE_DURATION = 30000; // 30 seconds cache
+const CACHE_DURATION = 40000; // 40 seconds cache (matches check interval)
+const HISTORY_RETENTION_MINUTES = 60; // 40s * 90 checks = 3600s = 60 minutes
 
 // Ensure status_history table exists
 async function ensureStatusTable() {
@@ -73,11 +74,12 @@ router.get('/', async (_req: Request, res: Response) => {
     await ensureStatusTable();
     const db = getDb();
     
-    // Get history for last 90 checks per service (15 minutes at 10s intervals)
+    // Get history for last 90 checks per service (60 minutes at ~40s intervals)
+    const retentionInterval = `${HISTORY_RETENTION_MINUTES} minutes`;
     const history = await db<StatusHistoryRow[]>`
       SELECT service_name, status, response_time, created_at
       FROM status_history
-      WHERE created_at > NOW() - INTERVAL '15 minutes'
+      WHERE created_at > NOW() - ${retentionInterval}::interval
       ORDER BY service_name, created_at DESC
     `;
     
@@ -193,10 +195,11 @@ router.post('/check', async (req: Request, res: Response) => {
       `;
     }
     
-    // Clean up old records (older than 15 minutes)
+    // Clean up old records (older than retention period)
+    const cleanupInterval = `${HISTORY_RETENTION_MINUTES} minutes`;
     await db`
       DELETE FROM status_history 
-      WHERE created_at < NOW() - INTERVAL '15 minutes'
+      WHERE created_at < NOW() - ${cleanupInterval}::interval
     `;
     
     return res.json({ 
