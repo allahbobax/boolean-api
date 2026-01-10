@@ -48,6 +48,8 @@ const allowedOriginPatterns = [
   /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
   /^https:\/\/(?:www\.)?booleanclient\.ru$/,
   /^https:\/\/.*\.booleanclient\.ru$/,
+  /^https:\/\/status\.booleanclient\.ru$/,  // Explicit status page
+  /^https:\/\/.*\.onrender\.com$/,  // Render deployments
 ];
 
 function isOriginAllowed(origin: string | undefined): string | false {
@@ -60,10 +62,10 @@ function isOriginAllowed(origin: string | undefined): string | false {
 app.options('*', (req, res) => {
   const origin = req.headers.origin;
   const allowedOrigin = isOriginAllowed(origin);
-  
+
   // Always set Vary header for proper caching
   res.setHeader('Vary', 'Origin');
-  
+
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -71,7 +73,7 @@ app.options('*', (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
     res.setHeader('Access-Control-Max-Age', '86400');
   }
-  
+
   res.status(204).end();
 });
 
@@ -79,15 +81,15 @@ app.options('*', (req, res) => {
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const allowedOrigin = isOriginAllowed(origin);
-  
+
   // Always set Vary for proper caching with different origins
   res.setHeader('Vary', 'Origin');
-  
+
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
-  
+
   next();
 });
 
@@ -150,10 +152,41 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Not found' });
 });
 
+// Background Status Checker (for persistent environments like Render)
+// On Vercel this will not run reliably, but on Render it will ensure the heartmap is always full
+if (process.env.RENDER || process.env.PERSISTENT_HOST) {
+  const STATUS_CHECK_INTERVAL = 60000; // 1 minute
+
+  const runBackgroundCheck = async () => {
+    try {
+      // We can use the existing check logic by hitting our own endpoint or calling the logic directly
+      // Here we hit the internal /status/check endpoint
+      const internalApiKey = process.env.STATUS_PAGE_API_KEY || process.env.INTERNAL_API_KEY;
+      const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
+
+      await fetch(`${baseUrl}/status/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': internalApiKey || ''
+        }
+      });
+      logger.info('Background status check completed');
+    } catch (err) {
+      logger.error('Background status check failed', { error: err });
+    }
+  };
+
+  // Run initial check after server start
+  setTimeout(runBackgroundCheck, 10000);
+  // Then run periodically
+  setInterval(runBackgroundCheck, STATUS_CHECK_INTERVAL);
+}
+
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('Server error', { 
-    endpoint: req.path, 
+  logger.error('Server error', {
+    endpoint: req.path,
     method: req.method,
     ip: req.ip,
     error: err.message
