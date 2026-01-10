@@ -26,7 +26,7 @@ router.get('/', async (_req: Request, res: Response) => {
   
   const result = await sql<User[]>`
     SELECT id, username, email, subscription, subscription_end_date, registered_at, 
-           is_admin, is_banned, email_verified, settings, hwid 
+           is_admin, is_banned, email_verified, settings, hwid, avatar 
     FROM users ORDER BY id DESC
   `;
 
@@ -41,7 +41,8 @@ router.get('/', async (_req: Request, res: Response) => {
     isBanned: dbUser.is_banned,
     emailVerified: dbUser.email_verified,
     settings: dbUser.settings,
-    hwid: dbUser.hwid
+    hwid: dbUser.hwid,
+    avatar: dbUser.avatar
   }));
 
   return res.json({ success: true, data: users });
