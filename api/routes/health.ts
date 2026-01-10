@@ -121,16 +121,9 @@ router.get('/launcher', async (_req: Request, res: Response) => {
   }
 });
 
-// Lightweight ping endpoint for status checks (no heavy DB queries)
-router.get('/ping', async (_req: Request, res: Response) => {
-  try {
-    const sql = getDb();
-    await sql`SELECT 1`;
-    return res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  } catch (error) {
-    console.error('Health ping error:', error);
-    return res.status(500).json({ status: 'error', timestamp: new Date().toISOString() });
-  }
+// Lightweight ping endpoint for status checks (no DB queries - just checks if API is alive)
+router.get('/ping', (_req: Request, res: Response) => {
+  return res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 router.get('/', async (_req: Request, res: Response) => {

@@ -13,7 +13,14 @@ let liveCheckCache: {
   timestamp: number;
 } = { data: null, timestamp: 0 };
 
+// In-memory cache for GET /status (cached DB results)
+let statusCache: {
+  data: Array<{ name: string; status: string; responseTime: number; uptime: number; history: Array<{ time: string; responseTime: number; status: string }> }> | null;
+  timestamp: number;
+} = { data: null, timestamp: 0 };
+
 const CACHE_DURATION = 40000; // 40 seconds cache (matches check interval)
+const STATUS_CACHE_DURATION = 10000; // 10 seconds cache for GET /status
 const HISTORY_RETENTION_MINUTES = 60; // 40s * 90 checks = 3600s = 60 minutes
 
 // Ensure status_history table exists
@@ -51,7 +58,7 @@ async function checkService(url: string): Promise<{ status: string; responseTime
     
     if (response.ok) {
       return { 
-        status: responseTime > 2000 ? 'degraded' : 'operational',
+        status: responseTime > 5000 ? 'degraded' : 'operational',
         responseTime 
       };
     }
@@ -71,16 +78,36 @@ interface StatusHistoryRow {
 // GET /status - Get current status and history for all services
 router.get('/', async (_req: Request, res: Response) => {
   try {
+    // Проверяем кэш сначала (быстрый ответ)
+    const now = Date.now();
+    if (statusCache.data && (now - statusCache.timestamp) < STATUS_CACHE_DURATION) {
+      return res.json({ 
+        success: true, 
+        data: statusCache.data,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     await ensureStatusTable();
     const db = getDb();
     
-    // Get history for last 90 checks per service (60 minutes at ~40s intervals)
-    const retentionInterval = `${HISTORY_RETENTION_MINUTES} minutes`;
+    // Оптимизированный запрос с LIMIT через ROW_NUMBER
     const history = await db<StatusHistoryRow[]>`
+      WITH ranked AS (
+        SELECT 
+          service_name, 
+          status, 
+          response_time, 
+          created_at,
+          ROW_NUMBER() OVER (PARTITION BY service_name ORDER BY created_at DESC) as rn
+        FROM status_history
+        WHERE created_at > NOW() - INTERVAL '${HISTORY_RETENTION_MINUTES} minutes'
+      )
       SELECT service_name, status, response_time, created_at
-      FROM status_history
-      WHERE created_at > NOW() - ${retentionInterval}::interval
-      ORDER BY service_name, created_at DESC
+      FROM ranked
+      WHERE rn <= 90
+      ORDER BY service_name, created_at ASC
     `;
     
     // Group by service
@@ -95,10 +122,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const serviceNames = ['Auth', 'API', 'Site', 'Launcher'];
     
     for (const name of serviceNames) {
-      const serviceHistory = history
-        .filter(h => h.service_name === name)
-        .slice(0, 90)
-        .reverse();
+      const serviceHistory = history.filter(h => h.service_name === name);
       
       const operationalCount = serviceHistory.filter(
         h => h.status === 'operational' || h.status === 'degraded'
@@ -123,9 +147,15 @@ router.get('/', async (_req: Request, res: Response) => {
       };
     }
     
+    const result = Object.values(services);
+    
+    // Сохраняем в кэш
+    statusCache = { data: result, timestamp: now };
+    
     return res.json({ 
       success: true, 
-      data: Object.values(services),
+      data: result,
+      cached: false,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

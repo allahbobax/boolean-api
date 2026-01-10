@@ -97,7 +97,31 @@ router.post('/activate', async (req: Request, res: Response) => {
     newSubscription = 'alpha';
   }
 
-  await sql`UPDATE users SET subscription = ${newSubscription} WHERE id = ${userId}`;
+  // Вычисляем дату окончания подписки
+  // duration_days = 0 означает бессрочную подписку (null)
+  // duration_days > 0 означает подписку на N дней
+  let subscriptionEndDate: string | null = null;
+  
+  if (licenseKey.duration_days > 0) {
+    // Получаем текущую дату окончания подписки пользователя
+    const userResult = await sql`SELECT subscription_end_date FROM users WHERE id = ${userId}`;
+    const currentEndDate = userResult[0]?.subscription_end_date;
+    
+    // Если у пользователя уже есть активная подписка, продлеваем от неё
+    // Иначе считаем от текущей даты
+    const baseDate = currentEndDate && new Date(currentEndDate) > new Date() 
+      ? new Date(currentEndDate) 
+      : new Date();
+    
+    baseDate.setDate(baseDate.getDate() + licenseKey.duration_days);
+    subscriptionEndDate = baseDate.toISOString();
+  }
+
+  await sql`
+    UPDATE users 
+    SET subscription = ${newSubscription}, subscription_end_date = ${subscriptionEndDate} 
+    WHERE id = ${userId}
+  `;
 
   return res.json({
     success: true,
@@ -105,7 +129,8 @@ router.post('/activate', async (req: Request, res: Response) => {
     data: {
       product: licenseKey.product,
       duration: licenseKey.duration_days,
-      newSubscription
+      newSubscription,
+      subscriptionEndDate
     }
   });
 });
