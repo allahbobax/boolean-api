@@ -1,4 +1,20 @@
 import crypto from 'crypto';
+import { Redis } from '@upstash/redis';
+
+// Redis клиент для хранения попыток верификации
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
+  url: REDIS_URL,
+  token: REDIS_TOKEN,
+}) : null;
+
+const VERIFICATION_PREFIX = 'verification_attempts:';
+const VERIFICATION_TTL = 15 * 60; // 15 минут в секундах
+
+// In-memory fallback (только если Redis недоступен)
+const fallbackAttempts = new Map<string, { count: number; resetTime: number }>();
 
 // Генерация криптографически стойкого кода верификации
 export function generateVerificationCode(length: number = 8): string {
@@ -45,15 +61,45 @@ export function verifyCode(providedCode: string, hashedCode: string): boolean {
   return crypto.timingSafeEqual(providedBuffer, storedBuffer);
 }
 
-// Ограничение попыток верификации
-const verificationAttempts = new Map<string, { count: number; resetTime: number }>();
+// Ограничение попыток верификации (Redis-based)
+export async function checkVerificationAttempts(identifier: string, maxAttempts: number = 5): Promise<boolean> {
+  const key = `${VERIFICATION_PREFIX}${identifier}`;
+  
+  if (redis) {
+    try {
+      const current = await redis.get<number>(key);
+      
+      if (current === null) {
+        // Первая попытка - устанавливаем счётчик с TTL
+        await redis.set(key, 1, { ex: VERIFICATION_TTL });
+        return true;
+      }
+      
+      if (current >= maxAttempts) {
+        return false;
+      }
+      
+      // Инкрементируем счётчик (TTL сохраняется)
+      await redis.incr(key);
+      return true;
+    } catch (error) {
+      console.error('Redis verification attempts error:', error);
+      // Fallback to in-memory при ошибке Redis
+      return checkVerificationAttemptsFallback(identifier, maxAttempts);
+    }
+  }
+  
+  // Fallback если Redis не настроен
+  return checkVerificationAttemptsFallback(identifier, maxAttempts);
+}
 
-export function checkVerificationAttempts(identifier: string, maxAttempts: number = 5): boolean {
+// In-memory fallback
+function checkVerificationAttemptsFallback(identifier: string, maxAttempts: number): boolean {
   const now = Date.now();
-  const attempts = verificationAttempts.get(identifier);
+  const attempts = fallbackAttempts.get(identifier);
   
   if (!attempts || now > attempts.resetTime) {
-    verificationAttempts.set(identifier, { count: 1, resetTime: now + 15 * 60 * 1000 }); // 15 минут
+    fallbackAttempts.set(identifier, { count: 1, resetTime: now + VERIFICATION_TTL * 1000 });
     return true;
   }
   
@@ -65,19 +111,30 @@ export function checkVerificationAttempts(identifier: string, maxAttempts: numbe
   return true;
 }
 
-export function resetVerificationAttempts(identifier: string): void {
-  verificationAttempts.delete(identifier);
+export async function resetVerificationAttempts(identifier: string): Promise<void> {
+  const key = `${VERIFICATION_PREFIX}${identifier}`;
+  
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (error) {
+      console.error('Redis reset verification attempts error:', error);
+    }
+  }
+  
+  // Также очищаем fallback
+  fallbackAttempts.delete(identifier);
 }
 
-// Очистка старых попыток
+// Очистка старых попыток (только для fallback)
 export function cleanupVerificationAttempts(): void {
   const now = Date.now();
-  for (const [key, data] of verificationAttempts.entries()) {
+  for (const [key, data] of fallbackAttempts.entries()) {
     if (now > data.resetTime) {
-      verificationAttempts.delete(key);
+      fallbackAttempts.delete(key);
     }
   }
 }
 
-// Запускаем очистку каждые 10 минут
+// Запускаем очистку fallback каждые 10 минут
 setInterval(cleanupVerificationAttempts, 10 * 60 * 1000);
