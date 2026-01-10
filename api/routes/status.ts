@@ -100,11 +100,16 @@ router.get('/', async (_req: Request, res: Response) => {
     // Проверяем кэш сначала (быстрый ответ)
     const now = Date.now();
     if (statusCache.data && (now - statusCache.timestamp) < STATUS_CACHE_DURATION) {
+      // Calculate time since last check for sync
+      const cacheAge = Math.round((now - statusCache.timestamp) / 1000);
+      const nextCheckIn = Math.max(0, Math.round((CACHE_DURATION - (now - statusCache.timestamp)) / 1000));
+      
       return res.json({
         success: true,
         data: statusCache.data,
         cached: true,
-        cacheAge: Math.round((now - statusCache.timestamp) / 1000),
+        cacheAge,
+        nextCheckIn,
         timestamp: new Date().toISOString()
       });
     }
@@ -164,6 +169,12 @@ router.get('/', async (_req: Request, res: Response) => {
 
     const result = Object.values(services);
 
+    // Get last check time for sync
+    const lastCheckResult = await db`
+      SELECT created_at FROM status_history ORDER BY created_at DESC LIMIT 1
+    `;
+    const lastCheckTime = lastCheckResult[0]?.created_at?.toISOString() || new Date().toISOString();
+
     // Сохраняем в кэш
     statusCache = { data: result, timestamp: now };
 
@@ -171,6 +182,8 @@ router.get('/', async (_req: Request, res: Response) => {
       success: true,
       data: result,
       cached: false,
+      lastCheckTime,
+      nextCheckIn: CACHE_DURATION / 1000,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
