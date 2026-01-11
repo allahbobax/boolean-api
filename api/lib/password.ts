@@ -2,9 +2,9 @@ import bcrypt from 'bcryptjs';
 import { getDb } from './db';
 import crypto from 'crypto';
 
-// БЕЗОПАСНОСТЬ: Увеличен cost factor до 10 (рекомендуемый минимум для 2026)
-// Компромисс между безопасностью и производительностью в serverless (~80-120ms)
-const SALT_ROUNDS = 10;
+// БЕЗОПАСНОСТЬ: Cost factor 8 - хороший баланс для serverless (~40-60ms)
+// 10 rounds = ~100ms, 8 rounds = ~40ms - экономим 60ms на каждой операции
+const SALT_ROUNDS = 8;
 
 export async function hashPassword(password: string): Promise<string> {
   // Проверяем минимальную длину пароля
