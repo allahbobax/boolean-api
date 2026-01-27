@@ -20,6 +20,7 @@ import products from './routes/products';
 import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
+import payments from './routes/payments';
 
 // Проверка критичных переменных окружения
 const REQUIRED_ENV_VARS = [
@@ -146,6 +147,7 @@ app.use('/products', products);
 app.use('/friends', friends);
 app.use('/client', client);
 app.use('/status', status);
+app.use('/payments', payments);
 
 // 404 handler
 app.use((_req, res) => {

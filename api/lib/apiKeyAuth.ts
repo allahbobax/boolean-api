@@ -45,6 +45,7 @@ const PUBLIC_ROUTES = [
   '/status/check', // live check для status page (защищён STATUS_PAGE_API_KEY внутри роута)
   '/incidents/active', // только активные инциденты публичны для status page
   '/incidents', // GET запросы к списку инцидентов (только чтение)
+  '/payments/lava-webhook', // webhook от Lava.top (защищён подписью внутри роута)
 ];
 
 // Роуты которые требуют только авторизацию пользователя (JWT), но не API ключ
