@@ -1,6 +1,6 @@
 // Catch-all route for all API requests
 import { VercelRequest, VercelResponse } from '@vercel/node'
-import app from '../api/index'
+import app from './index'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle preflight requests
