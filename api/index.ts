@@ -51,6 +51,7 @@ const allowedOriginPatterns = [
   /^https:\/\/.*\.booleanclient\.ru$/,
   /^https:\/\/status\.booleanclient\.ru$/,  // Explicit status page
   /^https:\/\/.*\.onrender\.com$/,  // Render deployments
+  /^https:\/\/.*\.infinityfree\.com$/,  // InfinityFree hosting
 ];
 
 function isOriginAllowed(origin: string | undefined): string | false {
