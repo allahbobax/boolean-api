@@ -49,6 +49,8 @@ const allowedOriginPatterns = [
   /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
   /^https:\/\/(?:www\.)?booleanclient\.ru$/,
   /^https:\/\/.*\.booleanclient\.ru$/,
+  /^https:\/\/booleanclient\.online$/,
+  /^https:\/\/www\.booleanclient\.online$/,
   /^https:\/\/status\.booleanclient\.ru$/,  // Explicit status page
   /^https:\/\/.*\.onrender\.com$/,  // Render deployments
   /^https:\/\/.*\.infinityfree\.com$/,  // InfinityFree hosting
