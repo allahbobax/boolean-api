@@ -12,20 +12,8 @@ const router = Router();
 
 // Валидация надежности пароля
 function validatePassword(password: string): { valid: boolean; message?: string } {
-  if (password.length < 12) {
-    return { valid: false, message: 'Пароль должен быть минимум 12 символов' };
-  }
-  if (!/[A-Z]/.test(password)) {
-    return { valid: false, message: 'Пароль должен содержать заглавную букву' };
-  }
-  if (!/[a-z]/.test(password)) {
-    return { valid: false, message: 'Пароль должен содержать строчную букву' };
-  }
-  if (!/[0-9]/.test(password)) {
-    return { valid: false, message: 'Пароль должен содержать цифру' };
-  }
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    return { valid: false, message: 'Пароль должен содержать спецсимвол' };
+  if (password.length < 6) {
+    return { valid: false, message: 'Пароль должен быть минимум 6 символов' };
   }
   return { valid: true };
 }

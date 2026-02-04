@@ -51,14 +51,19 @@ const allowedOriginPatterns = [
   /^https:\/\/.*\.booleanclient\.ru$/,
   /^https:\/\/booleanclient\.online$/,
   /^https:\/\/www\.booleanclient\.online$/,
+  /^https:\/\/.*\.booleanclient\.online$/,  // Добавляем все поддомены
   /^https:\/\/status\.booleanclient\.ru$/,  // Explicit status page
   /^https:\/\/.*\.onrender\.com$/,  // Render deployments
   /^https:\/\/.*\.infinityfree\.com$/,  // InfinityFree hosting
 ];
 
 function isOriginAllowed(origin: string | undefined): string | false {
-  if (!origin) return false;
+  if (!origin) {
+    console.log('CORS: No origin provided');
+    return false;
+  }
   const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
+  console.log('CORS: Origin:', origin, 'Allowed:', isAllowed);
   return isAllowed ? origin : false;
 }
 
