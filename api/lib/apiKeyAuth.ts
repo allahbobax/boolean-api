@@ -65,9 +65,6 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     return next();
   }
   
-  // Логируем для отладки
-  console.log(`[apiKeyAuth] ${method} ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
-  
   // Специальная обработка для /incidents - только GET запросы публичны
   if (path.startsWith('/incidents')) {
     if (method === 'GET') {
@@ -85,7 +82,6 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   });
   
   if (isPublicRoute) {
-    console.log(`[apiKeyAuth] Public route allowed: ${method} ${path}`);
     return next();
   }
   
@@ -106,7 +102,6 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   }
   
   if (!apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
-    console.log(`[apiKeyAuth] Access denied for ${method} ${path}`);
     return res.status(403).json({ 
       success: false, 
       message: 'Access denied' 
