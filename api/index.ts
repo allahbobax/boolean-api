@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { warmupDb } from './lib/db';
 import { apiKeyAuth } from './lib/apiKeyAuth';
@@ -36,56 +37,38 @@ const OPTIONAL_ENV_VARS = [
   'TURNSTILE_SECRET_KEY',
 ];
 const app = express();
-
-// Убираем X-Powered-By до всех middleware
 app.disable('x-powered-by');
 
-// Warm up DB connection early (non-blocking)
-warmupDb();
-
-// CORS configuration
+// CORS configuration constants
 const allowedOriginPatterns = [
   /^http:\/\/localhost(?::\d+)?$/,
   /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
-  /^https:\/\/(?:www\.)?booleanclient\.ru$/,
-  /^https:\/\/.*\.booleanclient\.ru$/,
-  /^https:\/\/booleanclient\.online$/,
-  /^https:\/\/www\.booleanclient\.online$/,
-  /^https:\/\/.*\.booleanclient\.online$/,
-  /^https:\/\/status\.booleanclient\.ru$/,
-  /^https:\/\/.*\.onrender\.com$/,
-  /^https:\/\/.*\.infinityfree\.com$/,
+  /^https?:\/\/(?:www\.)?booleanclient\.ru$/,
+  /^https?:\/\/.*\.booleanclient\.ru$/,
+  /^https?:\/\/booleanclient\.online$/,
+  /^https?:\/\/www\.booleanclient\.online$/,
+  /^https?:\/\/.*\.booleanclient\.online$/,
+  /^https?:\/\/status\.booleanclient\.ru$/,
+  /^https?:\/\/.*\.onrender\.com$/,
+  /^https?:\/\/.*\.infinityfree\.com$/,
 ];
 
-function getValidatedOrigin(origin: string | undefined): string | null {
-  if (!origin) return null;
-  const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
-  return isAllowed ? origin : null;
-}
-
-// CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const validatedOrigin = getValidatedOrigin(origin);
-
-  if (validatedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', validatedOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Vary', 'Origin');
-
-    if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, x-api-key');
-      res.setHeader('Access-Control-Max-Age', '86400');
-      return res.status(204).end();
+// CORS configuration using the official package
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      // Для разработки можно разрешить, но в проде лучше ограничить
+      callback(null, false);
     }
-  } else if (req.method === 'OPTIONS') {
-    // Для OPTIONS запросов без origin или с неразрешенным origin всё равно отвечаем 204
-    return res.status(204).end();
-  }
-
-  next();
-});
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'x-api-key']
+}));
 
 app.use(express.json());
 app.use(cookieParser());
@@ -98,19 +81,16 @@ app.use(helmet({
     preload: true
   },
   contentSecurityPolicy: {
+    useDefaults: true,
     directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://challenges.cloudflare.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "https://booleanclient.ru", "https://challenges.cloudflare.com"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://api.booleanclient.online"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'self'", "https://challenges.cloudflare.com"],
-      baseUri: ["'self'"],
-      frameAncestors: ["'self'", "https://booleanclient.online", "https://www.booleanclient.online"],
-      formAction: ["'self'"],
+      "default-src": ["'self'"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://challenges.cloudflare.com"],
+      "script-src": ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      "img-src": ["'self'", "data:", "https://booleanclient.ru", "https://challenges.cloudflare.com"],
+      "connect-src": ["'self'", "https://challenges.cloudflare.com", "https://api.booleanclient.online"],
+      "font-src": ["'self'", "https://fonts.gstatic.com"],
+      "frame-src": ["'self'", "https://challenges.cloudflare.com"],
+      "frame-ancestors": ["'self'", "https://booleanclient.online", "https://www.booleanclient.online", "https://booleanclient.ru"],
     }
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }

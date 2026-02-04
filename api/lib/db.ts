@@ -20,22 +20,15 @@ export function getDb() {
 }
 
 // Warm up connection pool - call this early in request lifecycle
+// Optimized for serverless: we don't want to block the thread
 export async function warmupDb() {
   try {
     const db = getDb();
-    await db`SELECT 1`;
-    // Running these once on cold start is better than every request
-    await Promise.all([
-      ensureUserSchema(),
-      ensureKeysTable(),
-      ensureLicenseKeysTable(),
-      ensureIncidentsTables(),
-      ensureFriendshipsTable(),
-      ensureVersionsTable()
-    ]);
-    console.log('Database schema ensured during warmup');
+    // Non-blocking ping
+    db`SELECT 1`.catch(() => { });
+    console.log('Database warmup initiated (lazy)');
   } catch (err) {
-    console.error('Database warmup error:', err);
+    // Ignore errors in warmup
   }
 }
 
