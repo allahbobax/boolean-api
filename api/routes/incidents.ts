@@ -29,7 +29,6 @@ function formatIncident(row: Record<string, unknown>): Incident {
 // Get active incidents
 router.get('/active', async (_req: Request, res: Response) => {
   const sql = getDb();
-  await ensureIncidentsTables();
 
   const result = await sql`
     SELECT i.*, 
@@ -50,7 +49,6 @@ router.get('/active', async (_req: Request, res: Response) => {
 // Get all incidents
 router.get('/', async (req: Request, res: Response) => {
   const sql = getDb();
-  await ensureIncidentsTables();
 
   const limit = parseInt(req.query.limit as string || '50');
 

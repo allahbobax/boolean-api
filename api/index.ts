@@ -51,52 +51,37 @@ const allowedOriginPatterns = [
   /^https:\/\/.*\.booleanclient\.ru$/,
   /^https:\/\/booleanclient\.online$/,
   /^https:\/\/www\.booleanclient\.online$/,
-  /^https:\/\/.*\.booleanclient\.online$/,  // Добавляем все поддомены
-  /^https:\/\/status\.booleanclient\.ru$/,  // Explicit status page
-  /^https:\/\/.*\.onrender\.com$/,  // Render deployments
-  /^https:\/\/.*\.infinityfree\.com$/,  // InfinityFree hosting
+  /^https:\/\/.*\.booleanclient\.online$/,
+  /^https:\/\/status\.booleanclient\.ru$/,
+  /^https:\/\/.*\.onrender\.com$/,
+  /^https:\/\/.*\.infinityfree\.com$/,
 ];
 
-function isOriginAllowed(origin: string | undefined): string | false {
-  if (!origin) {
-    console.log('CORS: No origin provided');
-    return false;
-  }
+function getValidatedOrigin(origin: string | undefined): string | null {
+  if (!origin) return null;
   const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
-  console.log('CORS: Origin:', origin, 'Allowed:', isAllowed);
-  return isAllowed ? origin : false;
+  return isAllowed ? origin : null;
 }
 
-// Manual preflight handler BEFORE any other middleware
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  const allowedOrigin = isOriginAllowed(origin);
-
-  // Always set Vary header for proper caching
-  res.setHeader('Vary', 'Origin');
-
-  if (allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
-    res.setHeader('Access-Control-Max-Age', '86400');
-  }
-
-  res.status(204).end();
-});
-
-// Add CORS headers to ALL responses (including non-preflight)
+// CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const allowedOrigin = isOriginAllowed(origin);
+  const validatedOrigin = getValidatedOrigin(origin);
 
-  // Always set Vary for proper caching with different origins
-  res.setHeader('Vary', 'Origin');
-
-  if (allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  if (validatedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', validatedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, x-api-key');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      return res.status(204).end();
+    }
+  } else if (req.method === 'OPTIONS') {
+    // Для OPTIONS запросов без origin или с неразрешенным origin всё равно отвечаем 204
+    return res.status(204).end();
   }
 
   next();
@@ -108,24 +93,24 @@ app.use(cookieParser());
 // Security headers
 app.use(helmet({
   hsts: {
-    maxAge: 31536000, // 1 год
+    maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'sha256-'"], // Удалили unsafe-inline, используем хеши
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https://booleanclient.ru"], // Ограничили домены
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://challenges.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      imgSrc: ["'self'", "data:", "https://booleanclient.ru", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://api.booleanclient.online"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      baseUri: ["'self'"], // Защита от base tag injection
-      frameAncestors: ["'none'"], // Защита от ClickJacking (современная альтернатива X-Frame-Options)
-      formAction: ["'self'"], // Ограничение отправки форм
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'", "https://booleanclient.online", "https://www.booleanclient.online"],
+      formAction: ["'self'"],
     }
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }

@@ -24,8 +24,18 @@ export async function warmupDb() {
   try {
     const db = getDb();
     await db`SELECT 1`;
-  } catch {
-    // Ignore warmup errors
+    // Running these once on cold start is better than every request
+    await Promise.all([
+      ensureUserSchema(),
+      ensureKeysTable(),
+      ensureLicenseKeysTable(),
+      ensureIncidentsTables(),
+      ensureFriendshipsTable(),
+      ensureVersionsTable()
+    ]);
+    console.log('Database schema ensured during warmup');
+  } catch (err) {
+    console.error('Database warmup error:', err);
   }
 }
 
@@ -56,7 +66,7 @@ export async function ensureUserSchema() {
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code VARCHAR(6)`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code_expires TIMESTAMP WITH TIME ZONE`;
-    
+
     // БЕЗОПАСНОСТЬ: Добавляем поля для защиты от брутфорса
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_locked_until TIMESTAMP WITH TIME ZONE`;
