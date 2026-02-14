@@ -169,5 +169,14 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
+// Start server if not running on Vercel
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    logger.info(`Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
 // Vercel serverless handler
 export default app;

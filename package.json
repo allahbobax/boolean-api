@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vercel dev",
-    "build": "echo 'Vercel handles TypeScript compilation'",
+    "build": "tsc",
     "start": "node dist/api/index.js",
     "script:delete-users": "tsx scripts/delete-all-users.ts",
     "script:delete-keys": "tsx scripts/delete-all-keys.ts",
