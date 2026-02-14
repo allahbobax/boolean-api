@@ -104,38 +104,6 @@ export function decodeState(stateStr: string | null): Record<string, unknown> {
   }
 }
 
-export async function handleGitHub(code: string): Promise<OAuthProfile> {
-  try {
-    const tokenResponse = await fetchWithTimeout('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code })
-    }, 10000);
-    const tokens = await tokenResponse.json() as { access_token?: string };
-    if (!tokens.access_token) throw new Error('Token failed');
-
-    const userResponse = await fetchWithTimeout('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-    }, 10000);
-    const profile = await userResponse.json() as { id: number; email: string | null; name: string; login: string; avatar_url: string };
-
-    let email = profile.email;
-    if (!email) {
-      const emailsResponse = await fetchWithTimeout('https://api.github.com/user/emails', {
-        headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-      }, 10000);
-      const emails = await emailsResponse.json() as { email: string; primary: boolean }[];
-      const primaryEmail = emails.find(e => e.primary);
-      email = primaryEmail ? primaryEmail.email : null;
-    }
-
-    return { id: profile.id.toString(), email, name: profile.name || profile.login, login: profile.login, avatar: profile.avatar_url };
-  } catch (error) {
-    logger.error('GitHub OAuth failed', { provider: 'github' });
-    throw error;
-  }
-}
-
 export async function handleGoogle(code: string, redirectUri: string): Promise<OAuthProfile> {
   try {
     const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
@@ -160,27 +128,46 @@ export async function handleGoogle(code: string, redirectUri: string): Promise<O
   }
 }
 
-export async function handleYandex(code: string): Promise<OAuthProfile> {
+export async function handleDiscord(code: string, redirectUri: string): Promise<OAuthProfile> {
   try {
-    const tokenResponse = await fetchWithTimeout('https://oauth.yandex.ru/token', {
+    const tokenResponse = await fetchWithTimeout('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        grant_type: 'authorization_code', code, client_id: process.env.YANDEX_CLIENT_ID!, client_secret: process.env.YANDEX_CLIENT_SECRET!
+        client_id: process.env.DISCORD_CLIENT_ID!,
+        client_secret: process.env.DISCORD_CLIENT_SECRET!,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri
       })
     }, 10000);
     const tokens = await tokenResponse.json() as { access_token?: string };
     if (!tokens.access_token) throw new Error('Token failed');
 
-    const userResponse = await fetchWithTimeout('https://login.yandex.ru/info?format=json', {
-      headers: { Authorization: `OAuth ${tokens.access_token}` }
+    const userResponse = await fetchWithTimeout('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
     }, 10000);
-    const profile = await userResponse.json() as { id: string; default_email: string; display_name: string; login: string; default_avatar_id: string };
-    const avatarId = profile.default_avatar_id;
-    const avatar = avatarId ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200` : null;
-    return { id: profile.id, email: profile.default_email || `${profile.id}@yandex.oauth`, name: profile.display_name || profile.login, avatar };
+    const profile = await userResponse.json() as { 
+      id: string; 
+      email: string | null; 
+      username: string; 
+      global_name: string | null;
+      avatar: string | null;
+    };
+    
+    const avatar = profile.avatar 
+      ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=256`
+      : null;
+    
+    return { 
+      id: profile.id, 
+      email: profile.email || `${profile.id}@discord.oauth`, 
+      name: profile.global_name || profile.username,
+      login: profile.username,
+      avatar 
+    };
   } catch (error) {
-    logger.error('Yandex OAuth failed', { provider: 'yandex' });
+    logger.error('Discord OAuth failed', { provider: 'discord' });
     throw error;
   }
 }
