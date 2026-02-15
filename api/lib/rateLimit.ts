@@ -10,10 +10,14 @@ import { Redis } from '@upstash/redis';
 // Проверка наличия переменных окружения для Redis
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-// Инициализация Redis клиента (только если переменные заданы)
-const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
-  url: REDIS_URL,
-  token: REDIS_TOKEN,
+// Инициализация Redis клиента (только если переменные заданы и не являются пустыми строками или "undefined")
+const isValidRedisConfig = (url?: string, token?: string) => {
+  return url && token && token !== 'undefined' && token !== 'null' && url !== 'undefined' && url !== 'null';
+};
+
+const redis = isValidRedisConfig(REDIS_URL, REDIS_TOKEN) ? new Redis({
+  url: REDIS_URL!,
+  token: REDIS_TOKEN!,
 }) : null;
 
 // In-memory fallback rate limiter для случаев когда Redis недоступен

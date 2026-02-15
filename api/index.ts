@@ -161,7 +161,9 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 // Start server
 if (process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
+  console.log('Starting server on port:', PORT);
+  // Ensure we listen on all interfaces for Docker/Railway
+  app.listen(Number(PORT), '0.0.0.0', () => {
     logger.info(`Server is running on port ${PORT}`);
     console.log(`Server is running on port ${PORT}`);
   });
