@@ -22,20 +22,6 @@ import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
 import payments from './routes/payments';
-
-// Проверка критичных переменных окружения
-const REQUIRED_ENV_VARS = [
-  'DATABASE_URL',
-  'JWT_SECRET',
-  'INTERNAL_API_KEY',
-];
-
-const OPTIONAL_ENV_VARS = [
-  'UPSTASH_REDIS_REST_URL',
-  'UPSTASH_REDIS_REST_TOKEN',
-  'RESEND_API_KEY',
-  'TURNSTILE_SECRET_KEY',
-];
 const app = express();
 app.disable('x-powered-by');
 
@@ -50,6 +36,8 @@ const allowedOriginPatterns = [
   /^https?:\/\/.*\.booleanclient\.online$/,
   /^https?:\/\/status\.booleanclient\.ru$/,
   /^https?:\/\/.*\.onrender\.com$/,
+  /^https?:\/\/.*\.railway\.app$/,
+  /^https?:\/\/.*\.up\.railway\.app$/,
   /^https?:\/\/.*\.infinityfree\.com$/,
   /^https?:\/\/.*\.xisedlc\.lol$/,
   /^https?:\/\/xisedlc\.lol$/,
@@ -129,9 +117,8 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Not found' });
 });
 
-// Background Status Checker (for persistent environments like Render)
-// On Vercel this will not run reliably, but on Render it will ensure the heartmap is always full
-if (process.env.RENDER || process.env.PERSISTENT_HOST) {
+// Background Status Checker (for persistent environments like Railway/Render)
+if (process.env.NODE_ENV !== 'test') {
   const STATUS_CHECK_INTERVAL = 60000; // 1 minute
 
   const runBackgroundCheck = async () => {
@@ -171,8 +158,8 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// Start server if not running on Vercel
-if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
+// Start server
+if (process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     logger.info(`Server is running on port ${PORT}`);
@@ -180,5 +167,3 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   });
 }
 
-// Vercel serverless handler
-export default app;
