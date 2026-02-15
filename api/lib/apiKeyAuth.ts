@@ -82,7 +82,8 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   });
   
   // Пропускаем OAuth роуты (любые подпути)
-  if (isPublicRoute || path.startsWith('/oauth')) {
+  // Добавляем проверку на наличие /oauth/ в любой части пути для надежности
+  if (isPublicRoute || path.startsWith('/oauth') || path.includes('/oauth/')) {
     return next();
   }
   
@@ -103,6 +104,9 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   }
   
   if (!apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
+    // Логируем попытку доступа без ключа для отладки
+    console.log(`[Auth] Access denied for path: ${path}, method: ${method}`);
+    
     return res.status(403).json({ 
       success: false, 
       message: 'Access denied' 

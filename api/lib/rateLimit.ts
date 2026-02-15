@@ -10,12 +10,6 @@ import { Redis } from '@upstash/redis';
 // Проверка наличия переменных окружения для Redis
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!REDIS_URL || !REDIS_TOKEN) {
-  console.error('⚠️  WARNING: UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured!');
-  console.error('⚠️  Rate limiting will use in-memory fallback.');
-}
-
 // Инициализация Redis клиента (только если переменные заданы)
 const redis = REDIS_URL && REDIS_TOKEN ? new Redis({
   url: REDIS_URL,
