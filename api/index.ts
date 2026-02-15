@@ -102,19 +102,24 @@ app.get('/', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API Routes
-app.use('/health', health);
-app.use('/auth', auth);
-app.use('/oauth', oauth);
-app.use('/users', users);
-app.use('/hwid', hwid);
-app.use('/keys', keys);
-app.use('/incidents', incidents);
-app.use('/versions', versions);
-app.use('/products', products);
-app.use('/friends', friends);
-app.use('/client', client);
-app.use('/status', status);
+// API Routes Router
+const apiRouter = express.Router();
+apiRouter.use('/health', health);
+apiRouter.use('/auth', auth);
+apiRouter.use('/oauth', oauth);
+apiRouter.use('/users', users);
+apiRouter.use('/hwid', hwid);
+apiRouter.use('/keys', keys);
+apiRouter.use('/incidents', incidents);
+apiRouter.use('/versions', versions);
+apiRouter.use('/products', products);
+apiRouter.use('/friends', friends);
+apiRouter.use('/client', client);
+apiRouter.use('/status', status);
+
+// Mount API router
+app.use('/api', apiRouter); // Handle /api prefix (e.g. /api/oauth/...)
+app.use('/', apiRouter);    // Handle root prefix (e.g. /oauth/...)
 
 // 404 handler
 app.use((_req, res) => {

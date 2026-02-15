@@ -96,19 +96,23 @@ app.use(apiKeyAuth_1.apiKeyAuth);
 app.get('/', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-// API Routes
-app.use('/health', health_1.default);
-app.use('/auth', auth_1.default);
-app.use('/oauth', oauth_1.default);
-app.use('/users', users_1.default);
-app.use('/hwid', hwid_1.default);
-app.use('/keys', keys_1.default);
-app.use('/incidents', incidents_1.default);
-app.use('/versions', versions_1.default);
-app.use('/products', products_1.default);
-app.use('/friends', friends_1.default);
-app.use('/client', client_1.default);
-app.use('/status', status_1.default);
+// API Routes Router
+const apiRouter = express_1.default.Router();
+apiRouter.use('/health', health_1.default);
+apiRouter.use('/auth', auth_1.default);
+apiRouter.use('/oauth', oauth_1.default);
+apiRouter.use('/users', users_1.default);
+apiRouter.use('/hwid', hwid_1.default);
+apiRouter.use('/keys', keys_1.default);
+apiRouter.use('/incidents', incidents_1.default);
+apiRouter.use('/versions', versions_1.default);
+apiRouter.use('/products', products_1.default);
+apiRouter.use('/friends', friends_1.default);
+apiRouter.use('/client', client_1.default);
+apiRouter.use('/status', status_1.default);
+// Mount API router
+app.use('/api', apiRouter); // Handle /api prefix (e.g. /api/oauth/...)
+app.use('/', apiRouter); // Handle root prefix (e.g. /oauth/...)
 // 404 handler
 app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Not found' });

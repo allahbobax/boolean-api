@@ -105,14 +105,14 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
       return res.redirect(`http://127.0.0.1:3000/callback?user=${encodedUser}`);
     }
 
-    return res.redirect(`${frontendUrl}/auth?auth=success&user=${encodedUser}`);
+    return res.redirect(`${frontendUrl}/dashboard?auth=success&user=${encodedUser}`);
   } catch (err) {
     logger.error('OAuth callback failed', { provider, ip: req.ip });
 
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
     }
-    return res.redirect(`${frontendUrl}/auth?error=${provider}_failed`);
+    return res.redirect(`${frontendUrl}/dashboard?error=${provider}_failed`);
   }
 });
 
