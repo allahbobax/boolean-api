@@ -42,6 +42,10 @@ router.get('/:provider', async (req, res) => {
         google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('profile email')}&access_type=offline&state=${state}`,
         discord: `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('identify email')}&state=${state}`
     };
+    // LOGGING: Отладочная информация для поиска проблемы с redirect_uri
+    console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
+    console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
+    console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
     return res.redirect(urls[provider]);
 });
 // OAuth callback
