@@ -112,8 +112,10 @@ router.get('/:provider/exchange', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Invalid source' });
     }
     try {
-        const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
-        const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
+        // Убираем trailing slash если есть
+        const rawFrontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
+        const frontendUrl = rawFrontendUrl.replace(/\/$/, '');
+        const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
         let profile;
         switch (provider) {
             case 'google':
