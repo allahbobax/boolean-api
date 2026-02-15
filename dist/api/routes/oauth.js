@@ -28,9 +28,9 @@ router.get('/:provider', async (req, res) => {
     if (provider === 'discord' && !config.hasDiscord) {
         return res.status(503).json({ success: false, message: 'Discord OAuth не настроен' });
     }
-    const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
     const isLauncher = redirect === 'launcher';
-    const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
+    const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
     const stateObj = {
         source: isLauncher ? 'launcher' : 'web',
         hwid: hwid || null
@@ -49,7 +49,7 @@ router.get('/:provider/callback', async (req, res) => {
     const error = req.query.error;
     const state = req.query.state;
     const redirect = req.query.redirect;
-    const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
     const stateData = (0, oauth_1.decodeState)(state || null);
     const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
     const hwid = stateData.hwid;
@@ -60,7 +60,7 @@ router.get('/:provider/callback', async (req, res) => {
         return res.redirect(`${frontendUrl}/auth?error=${provider}_failed`);
     }
     try {
-        const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
+        const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
         let profile;
         switch (provider) {
             case 'google':

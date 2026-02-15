@@ -32,10 +32,10 @@ router.get('/:provider', async (req: Request, res: Response) => {
     return res.status(503).json({ success: false, message: 'Discord OAuth не настроен' });
   }
 
-  const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
   const isLauncher = redirect === 'launcher';
 
-  const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
+  const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
 
   const stateObj = {
     source: isLauncher ? 'launcher' : 'web',
@@ -60,7 +60,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const state = req.query.state as string | undefined;
   const redirect = req.query.redirect as string | undefined;
   
-  const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
   const stateData = decodeState(state || null);
   const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
   const hwid = stateData.hwid as string | undefined;
@@ -73,7 +73,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   }
 
   try {
-    const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
+    const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
     
     let profile;
     switch (provider) {
