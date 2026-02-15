@@ -109,54 +109,89 @@ export function decodeState(stateStr: string | null): Record<string, unknown> {
 
 export async function handleGoogle(code: string, redirectUri: string): Promise<OAuthProfile> {
   try {
+    const params = new URLSearchParams({
+      code, 
+      client_id: process.env.GOOGLE_CLIENT_ID!, 
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: redirectUri, 
+      grant_type: 'authorization_code'
+    });
+    
+    // LOGGING: Google Token Request
+    console.log(`Google OAuth: Requesting token with redirect_uri=${redirectUri}`);
+
     const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code, client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        redirect_uri: redirectUri, grant_type: 'authorization_code'
-      })
-    }, 10000);
+      body: params
+    }, 15000); // Увеличен таймаут
+    
+    if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('Google Token Error:', errorText);
+        throw new Error(`Google Token Failed: ${tokenResponse.status} ${errorText}`);
+    }
+
     const tokens = await tokenResponse.json() as { access_token?: string };
-    if (!tokens.access_token) throw new Error('Token failed');
+    if (!tokens.access_token) throw new Error('Token failed - no access_token');
 
     const userResponse = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` }
     }, 10000);
+    
+    if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error('Google UserInfo Error:', errorText);
+        throw new Error(`Google UserInfo Failed: ${userResponse.status}`);
+    }
+
     const profile = await userResponse.json() as { id: string; email: string; name: string; picture: string };
     return { id: profile.id, email: profile.email, name: profile.name, avatar: profile.picture };
   } catch (error) {
-    logger.error('Google OAuth failed', { provider: 'google' });
+    logger.error('Google OAuth failed', { provider: 'google', error });
     throw error;
   }
 }
 
 export async function handleDiscord(code: string, redirectUri: string): Promise<OAuthProfile> {
   try {
-    const tokenResponse = await fetchWithTimeout('https://discord.com/api/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
+    const params = new URLSearchParams({
         client_id: process.env.DISCORD_CLIENT_ID!,
         client_secret: process.env.DISCORD_CLIENT_SECRET!,
         grant_type: 'authorization_code',
         code,
         redirect_uri: redirectUri
-      })
-    }, 10000);
+      });
+
+    // LOGGING: Discord Token Request
+    console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
+
+    const tokenResponse = await fetchWithTimeout('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    }, 15000); // Увеличен таймаут
+    
+    if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('Discord Token Error:', errorText);
+        throw new Error(`Discord Token Failed: ${tokenResponse.status} ${errorText}`);
+    }
+
     const tokens = await tokenResponse.json() as { access_token?: string };
-    if (!tokens.access_token) throw new Error('Token failed');
+    if (!tokens.access_token) throw new Error('Token failed - no access_token');
 
     const userResponse = await fetchWithTimeout('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${tokens.access_token}` }
     }, 10000);
-    const profile = await userResponse.json() as { 
-      id: string; 
-      email: string | null; 
-      username: string; 
-      global_name: string | null;
-      avatar: string | null;
-    };
+    
+    if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error('Discord UserInfo Error:', errorText);
+        throw new Error(`Discord UserInfo Failed: ${userResponse.status}`);
+    }
+
+    const profile = await userResponse.json() as any;
     
     const avatar = profile.avatar 
       ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=256`
@@ -170,7 +205,7 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
       avatar 
     };
   } catch (error) {
-    logger.error('Discord OAuth failed', { provider: 'discord' });
+    logger.error('Discord OAuth failed', { provider: 'discord', error });
     throw error;
   }
 }
