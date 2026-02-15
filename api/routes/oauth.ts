@@ -32,7 +32,9 @@ router.get('/:provider', async (req: Request, res: Response) => {
     return res.status(503).json({ success: false, message: 'Discord OAuth не настроен' });
   }
 
-  const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
+  // Убираем trailing slash если есть, чтобы избежать двойных слешей
+  const rawFrontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
+  const frontendUrl = rawFrontendUrl.replace(/\/$/, '');
   const isLauncher = redirect === 'launcher';
 
   const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
@@ -60,7 +62,9 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const state = req.query.state as string | undefined;
   const redirect = req.query.redirect as string | undefined;
   
-  const frontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
+  // Убираем trailing slash если есть
+  const rawFrontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
+  const frontendUrl = rawFrontendUrl.replace(/\/$/, '');
   const stateData = decodeState(state || null);
   const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
   const hwid = stateData.hwid as string | undefined;
