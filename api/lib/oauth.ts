@@ -174,7 +174,7 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
       method: 'POST',
       headers: { 
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'BooleanApp/1.0 (https://xisedlc.lol, 1.0.0)',
+        'User-Agent': 'XiSeDLC/1.0 (https://xisedlc.lol, 1.0.0)',
         'Accept': 'application/json'
       },
       body: params
