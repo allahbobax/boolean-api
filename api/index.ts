@@ -119,6 +119,12 @@ apiRouter.use('/status', status);
 
 // Mount API router
 app.use('/api', apiRouter); // Handle /api prefix (e.g. /api/oauth/...)
+
+// Mount OAuth router explicitly to root for compatibility if needed, 
+// but also ensure it works under /api via apiRouter
+app.use('/oauth', oauth);
+
+// For other routes on root level (legacy support)
 app.use('/', apiRouter);    // Handle root prefix (e.g. /oauth/...)
 
 // 404 handler

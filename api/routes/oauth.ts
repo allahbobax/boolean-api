@@ -35,9 +35,15 @@ router.get('/:provider', async (req: Request, res: Response) => {
   // Убираем trailing slash если есть, чтобы избежать двойных слешей
   const rawFrontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
   const frontendUrl = rawFrontendUrl.replace(/\/$/, '');
+  
+  // API URL для callback (так как API на поддомене)
+  const apiUrl = process.env.API_URL || 'https://api.xisedlc.lol';
+  const cleanApiUrl = apiUrl.replace(/\/$/, '');
+
   const isLauncher = redirect === 'launcher';
 
-  const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
+  // Callback должен идти на API, а не на фронтенд
+  const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
 
   const stateObj = {
     source: isLauncher ? 'launcher' : 'web',
@@ -70,6 +76,11 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   // Убираем trailing slash если есть
   const rawFrontendUrl = process.env.FRONTEND_URL || 'https://xisedlc.lol';
   const frontendUrl = rawFrontendUrl.replace(/\/$/, '');
+  
+  // API URL для callback
+  const apiUrl = process.env.API_URL || 'https://api.xisedlc.lol';
+  const cleanApiUrl = apiUrl.replace(/\/$/, '');
+
   const stateData = decodeState(state || null);
   const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
   const hwid = stateData.hwid as string | undefined;
@@ -82,7 +93,8 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   }
 
   try {
-    const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
+    // Callback URI должен совпадать с тем, что был при старте
+    const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
     
     // LOGGING: Отладка входящего callback
     console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
