@@ -69,6 +69,9 @@ router.get('/:provider/callback', async (req, res) => {
     }
     try {
         const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
+        // LOGGING: Отладка входящего callback
+        console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+        console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
         let profile;
         switch (provider) {
             case 'google':

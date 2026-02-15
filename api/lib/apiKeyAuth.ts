@@ -77,6 +77,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   
   // Пропускаем OAuth роуты (любые подпути)
   // Добавляем проверку на наличие /oauth/ в любой части пути для надежности
+  // И отдельно проверяем /api/oauth
   if (isPublicRoute || path.startsWith('/oauth') || path.includes('/oauth/') || path.startsWith('/api/oauth')) {
     return next();
   }
