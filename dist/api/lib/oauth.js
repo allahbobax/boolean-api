@@ -111,7 +111,11 @@ async function handleGoogle(code, redirectUri) {
         console.log(`Google OAuth: Requesting token with redirect_uri=${redirectUri}`);
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://oauth2.googleapis.com/token', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'BooleanApp/1.0 (https://xisedlc.lol, 1.0.0)',
+                'Accept': 'application/json'
+            },
             body: params
         }, 15000); // Увеличен таймаут
         if (!tokenResponse.ok) {
@@ -151,7 +155,11 @@ async function handleDiscord(code, redirectUri) {
         console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://discord.com/api/oauth2/token', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'BooleanApp/1.0 (https://xisedlc.lol, 1.0.0)',
+                'Accept': 'application/json'
+            },
             body: params
         }, 15000); // Увеличен таймаут
         if (!tokenResponse.ok) {

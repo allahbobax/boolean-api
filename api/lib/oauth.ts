@@ -122,7 +122,11 @@ export async function handleGoogle(code: string, redirectUri: string): Promise<O
 
     const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'XiSeDLC/1.0 (https://xisedlc.lol, 1.0.0)',
+        'Accept': 'application/json'
+      },
       body: params
     }, 15000); // Увеличен таймаут
     
@@ -168,7 +172,11 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
 
     const tokenResponse = await fetchWithTimeout('https://discord.com/api/oauth2/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'BooleanApp/1.0 (https://xisedlc.lol, 1.0.0)',
+        'Accept': 'application/json'
+      },
       body: params
     }, 15000); // Увеличен таймаут
     
