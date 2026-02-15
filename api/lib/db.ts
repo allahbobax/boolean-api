@@ -40,30 +40,18 @@ export async function ensureUserSchema() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255),
         subscription VARCHAR(50) DEFAULT 'free',
         subscription_end_date TIMESTAMP WITH TIME ZONE,
         registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         is_admin BOOLEAN DEFAULT false,
         is_banned BOOLEAN DEFAULT false,
         email_verified BOOLEAN DEFAULT false,
-        verification_code VARCHAR(6),
-        verification_code_expires TIMESTAMP WITH TIME ZONE,
-        reset_code VARCHAR(6),
-        reset_code_expires TIMESTAMP WITH TIME ZONE,
         settings JSONB DEFAULT '{}',
         avatar TEXT,
         hwid VARCHAR(255)
       )
     `;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
-    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code VARCHAR(6)`;
-    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code_expires TIMESTAMP WITH TIME ZONE`;
-
-    // БЕЗОПАСНОСТЬ: Добавляем поля для защиты от брутфорса
-    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`;
-    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_locked_until TIMESTAMP WITH TIME ZONE`;
-    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login TIMESTAMP WITH TIME ZONE`;
   } catch (error) {
     console.error('Ensure user schema error:', error);
   }

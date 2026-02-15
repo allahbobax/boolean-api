@@ -33,7 +33,7 @@ async function verifyTurnstileToken(token, remoteIp) {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: formData.toString(),
-        }, 5000);
+        }, 3000); // Уменьшен таймаут с 5s до 3s
         const data = await response.json();
         if (!data.success) {
             logger_1.logger.warn('Turnstile verification failed', { errorCodes: data['error-codes'] });

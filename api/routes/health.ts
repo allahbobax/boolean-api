@@ -25,7 +25,7 @@ router.get('/site', async (_req: Request, res: Response) => {
 
   const start = Date.now();
   try {
-    const response = await fetch('https://booleanclient.ru', { 
+    const response = await fetch('https://xisedlc.lol', { 
       method: 'HEAD', // HEAD faster than GET
       signal: AbortSignal.timeout(3000) // Reduced from 10s to 3s
     });

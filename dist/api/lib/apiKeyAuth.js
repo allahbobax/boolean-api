@@ -25,34 +25,53 @@ function timingSafeCompare(provided, expected) {
 }
 // Публичные роуты которые не требуют API ключа
 const PUBLIC_ROUTES = [
+    '/', // корневой эндпоинт
+    '/csrf-token', // CSRF токен
     '/health',
-    '/auth/login',
-    '/auth/register',
-    '/auth/verify-code',
-    '/auth/resend-code',
-    '/auth/verify-email',
-    '/auth/resend-verification',
-    '/auth/forgot-password',
-    '/auth/verify-reset-code',
-    '/auth/reset-password',
+    '/health/ping', // health check для status page
+    '/health/site', // health check для status page
+    '/health/launcher', // health check для status page
     '/auth/check', // health check для status page
     '/oauth',
     '/status',
-    '/incidents', // публичный для status page
+    '/status/check', // live check для status page (защищён STATUS_PAGE_API_KEY внутри роута)
+    '/incidents/active', // только активные инциденты публичны для status page
+    '/incidents', // GET запросы к списку инцидентов (только чтение)
+    '/payments/lava-webhook', // webhook от Lava.top (защищён подписью внутри роута)
 ];
 // Роуты которые требуют только авторизацию пользователя (JWT), но не API ключ
 const USER_AUTH_ROUTES = [
-    '/auth/me',
-    '/auth/logout',
     '/friends',
     '/client',
 ];
 function apiKeyAuth(req, res, next) {
     const path = req.path;
-    // Логируем для отладки
-    console.log(`[apiKeyAuth] Path: ${path}, Has API Key: ${!!req.headers['x-api-key']}`);
-    // Пропускаем публичные роуты
-    if (PUBLIC_ROUTES.some(route => path.startsWith(route))) {
+    const method = req.method;
+    // Пропускаем preflight (OPTIONS) запросы - они обрабатываются CORS middleware
+    if (method === 'OPTIONS') {
+        return next();
+    }
+    // Специальная обработка для /incidents - только GET запросы публичны
+    if (path.startsWith('/incidents')) {
+        if (method === 'GET') {
+            // GET /incidents и GET /incidents/active публичны для status page
+            return next();
+        }
+        // POST, PUT, DELETE требуют API ключ
+        // Продолжаем проверку ниже
+    }
+    // Пропускаем публичные роуты (точное совпадение)
+    const isPublicRoute = PUBLIC_ROUTES.some(route => {
+        // Точное совпадение пути
+        return path === route;
+    });
+    // Пропускаем health check роуты (по префиксу)
+    if (path.startsWith('/health')) {
+        return next();
+    }
+    // Пропускаем OAuth роуты (любые подпути)
+    // Добавляем проверку на наличие /oauth/ в любой части пути для надежности
+    if (isPublicRoute || path.startsWith('/oauth') || path.includes('/oauth/')) {
         return next();
     }
     // Пропускаем роуты которые защищены JWT авторизацией
@@ -69,7 +88,8 @@ function apiKeyAuth(req, res, next) {
         });
     }
     if (!apiKey || !timingSafeCompare(apiKey, INTERNAL_API_KEY)) {
-        console.log(`[apiKeyAuth] Access denied for path: ${path}`);
+        // Логируем попытку доступа без ключа для отладки
+        console.log(`[Auth] Access denied for path: ${path}, method: ${method}`);
         return res.status(403).json({
             success: false,
             message: 'Access denied'

@@ -1,4 +1,16 @@
 import 'dotenv/config';
+
+// Глобальные обработчики ошибок для отладки
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL: Uncaught Exception:', err);
+  // Не выходим сразу, чтобы успеть записать лог
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -21,7 +33,6 @@ import products from './routes/products';
 import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
-import payments from './routes/payments';
 const app = express();
 app.disable('x-powered-by');
 
@@ -29,12 +40,6 @@ app.disable('x-powered-by');
 const allowedOriginPatterns = [
   /^http:\/\/localhost(?::\d+)?$/,
   /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
-  /^https?:\/\/(?:www\.)?booleanclient\.ru$/,
-  /^https?:\/\/.*\.booleanclient\.ru$/,
-  /^https?:\/\/booleanclient\.online$/,
-  /^https?:\/\/www\.booleanclient\.online$/,
-  /^https?:\/\/.*\.booleanclient\.online$/,
-  /^https?:\/\/status\.booleanclient\.ru$/,
   /^https?:\/\/.*\.onrender\.com$/,
   /^https?:\/\/.*\.railway\.app$/,
   /^https?:\/\/.*\.up\.railway\.app$/,
@@ -76,17 +81,17 @@ app.use(helmet({
       "default-src": ["'self'"],
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://challenges.cloudflare.com"],
       "script-src": ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
-      "img-src": ["'self'", "data:", "https://booleanclient.ru", "https://challenges.cloudflare.com"],
-      "connect-src": ["'self'", "https://challenges.cloudflare.com", "https://api.booleanclient.online"],
+      "img-src": ["'self'", "data:", "https://xisedlc.lol", "https://challenges.cloudflare.com"],
+      "connect-src": ["'self'", "https://challenges.cloudflare.com", "https://api.xisedlc.lol"],
       "font-src": ["'self'", "https://fonts.gstatic.com"],
       "frame-src": ["'self'", "https://challenges.cloudflare.com"],
-      "frame-ancestors": ["'self'", "https://booleanclient.online", "https://www.booleanclient.online", "https://booleanclient.ru"],
+      "frame-ancestors": ["'self'", "https://xisedlc.lol", "https://www.xisedlc.lol", "https://xisedlc.lol"],
     }
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
-// Global rate limiting
+// Global rate limiting except for health check routes
 app.use(generalLimiter);
 
 // API Key protection for all routes
@@ -110,7 +115,6 @@ app.use('/products', products);
 app.use('/friends', friends);
 app.use('/client', client);
 app.use('/status', status);
-app.use('/payments', payments);
 
 // 404 handler
 app.use((_req, res) => {
@@ -161,6 +165,12 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 // Start server
 if (process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3000;
+  
+  if (isNaN(Number(PORT))) {
+    console.error('CRITICAL: Invalid PORT configuration:', process.env.PORT);
+    process.exit(1);
+  }
+
   console.log('Starting server on port:', PORT);
   // Ensure we listen on all interfaces for Docker/Railway
   app.listen(Number(PORT), '0.0.0.0', () => {

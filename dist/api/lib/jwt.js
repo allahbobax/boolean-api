@@ -38,7 +38,10 @@ exports.verifyToken = verifyToken;
 const jose = __importStar(require("jose"));
 const encoder = new TextEncoder();
 async function generateToken(user) {
-    const secret = process.env.JWT_SECRET || 'your-jwt-secret';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('JWT_SECRET environment variable is not set. Application cannot start without it.');
+    }
     const secretKey = encoder.encode(secret);
     return await new jose.SignJWT({
         id: user.id,
@@ -51,7 +54,7 @@ async function generateToken(user) {
 }
 async function verifyToken(token) {
     try {
-        const secret = process.env.JWT_SECRET || 'your-jwt-secret';
+        const secret = process.env.JWT_SECRET;
         const secretKey = encoder.encode(secret);
         const { payload } = await jose.jwtVerify(token, secretKey);
         return payload;

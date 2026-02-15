@@ -42,6 +42,15 @@ const crypto = __importStar(require("crypto"));
 const jwt_1 = require("../lib/jwt");
 const db_1 = require("../lib/db");
 const logger_1 = require("../lib/logger");
+const redis_1 = require("@upstash/redis");
+// Redis клиент для rate limiting
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const redis = REDIS_URL && REDIS_TOKEN ? new redis_1.Redis({
+    url: REDIS_URL,
+    token: REDIS_TOKEN,
+}) : null;
+const RATE_LIMIT_PREFIX = 'auth_ratelimit:';
 // Middleware для проверки JWT токена
 async function authenticateToken(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -140,33 +149,63 @@ function requireInternalApiKey(req, res, next) {
         });
     }
 }
-// Rate limiting middleware (простая реализация в памяти)
-const rateLimitStore = new Map();
+// Rate limiting middleware (Redis-based с in-memory fallback)
+const fallbackRateLimitStore = new Map();
 function rateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
-    return (req, res, next) => {
+    const windowSeconds = Math.ceil(windowMs / 1000);
+    return async (req, res, next) => {
         const clientId = req.ip || 'unknown';
-        const now = Date.now();
-        const clientData = rateLimitStore.get(clientId);
-        if (!clientData || now > clientData.resetTime) {
-            rateLimitStore.set(clientId, { count: 1, resetTime: now + windowMs });
-            return next();
+        const key = `${RATE_LIMIT_PREFIX}${clientId}`;
+        if (redis) {
+            try {
+                const current = await redis.get(key);
+                if (current === null) {
+                    // Первый запрос - устанавливаем счётчик с TTL
+                    await redis.set(key, 1, { ex: windowSeconds });
+                    return next();
+                }
+                if (current >= maxRequests) {
+                    return res.status(429).json({
+                        success: false,
+                        message: 'Слишком много запросов. Попробуйте позже.'
+                    });
+                }
+                // Инкрементируем счётчик
+                await redis.incr(key);
+                return next();
+            }
+            catch (error) {
+                logger_1.logger.error('Redis rate limit error', { error });
+                // Fallback to in-memory при ошибке Redis
+                return rateLimitFallback(clientId, maxRequests, windowMs, res, next);
+            }
         }
-        if (clientData.count >= maxRequests) {
-            return res.status(429).json({
-                success: false,
-                message: 'Слишком много запросов. Попробуйте позже.'
-            });
-        }
-        clientData.count++;
-        next();
+        // Fallback если Redis не настроен
+        return rateLimitFallback(clientId, maxRequests, windowMs, res, next);
     };
 }
-// Очистка старых записей rate limit (вызывать периодически)
+function rateLimitFallback(clientId, maxRequests, windowMs, res, next) {
+    const now = Date.now();
+    const clientData = fallbackRateLimitStore.get(clientId);
+    if (!clientData || now > clientData.resetTime) {
+        fallbackRateLimitStore.set(clientId, { count: 1, resetTime: now + windowMs });
+        return next();
+    }
+    if (clientData.count >= maxRequests) {
+        return res.status(429).json({
+            success: false,
+            message: 'Слишком много запросов. Попробуйте позже.'
+        });
+    }
+    clientData.count++;
+    return next();
+}
+// Очистка старых записей rate limit fallback (вызывать периодически)
 function cleanupRateLimit() {
     const now = Date.now();
-    for (const [key, data] of rateLimitStore.entries()) {
+    for (const [key, data] of fallbackRateLimitStore.entries()) {
         if (now > data.resetTime) {
-            rateLimitStore.delete(key);
+            fallbackRateLimitStore.delete(key);
         }
     }
 }

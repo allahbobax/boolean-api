@@ -27,7 +27,6 @@ function formatIncident(row) {
 // Get active incidents
 router.get('/active', async (_req, res) => {
     const sql = (0, db_1.getDb)();
-    await (0, db_1.ensureIncidentsTables)();
     const result = await sql `
     SELECT i.*, 
       COALESCE(json_agg(
@@ -45,7 +44,6 @@ router.get('/active', async (_req, res) => {
 // Get all incidents
 router.get('/', async (req, res) => {
     const sql = (0, db_1.getDb)();
-    await (0, db_1.ensureIncidentsTables)();
     const limit = parseInt(req.query.limit || '50');
     const result = await sql `
     SELECT i.*, 
@@ -61,6 +59,36 @@ router.get('/', async (req, res) => {
   `;
     return res.json({ success: true, data: result.map(formatIncident) });
 });
+// Валидация входных данных
+const MAX_TITLE_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_MESSAGE_LENGTH = 2000;
+const VALID_SEVERITIES = ['minor', 'major', 'critical'];
+const VALID_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'];
+function validateIncidentInput(data) {
+    if (data.title !== undefined) {
+        if (typeof data.title !== 'string' || data.title.length > MAX_TITLE_LENGTH) {
+            return { valid: false, error: `Title must be a string with max ${MAX_TITLE_LENGTH} characters` };
+        }
+    }
+    if (data.description !== undefined) {
+        if (typeof data.description !== 'string' || data.description.length > MAX_DESCRIPTION_LENGTH) {
+            return { valid: false, error: `Description must be a string with max ${MAX_DESCRIPTION_LENGTH} characters` };
+        }
+    }
+    if (data.message !== undefined) {
+        if (typeof data.message !== 'string' || data.message.length > MAX_MESSAGE_LENGTH) {
+            return { valid: false, error: `Message must be a string with max ${MAX_MESSAGE_LENGTH} characters` };
+        }
+    }
+    if (data.severity !== undefined && !VALID_SEVERITIES.includes(data.severity)) {
+        return { valid: false, error: `Severity must be one of: ${VALID_SEVERITIES.join(', ')}` };
+    }
+    if (data.status !== undefined && !VALID_STATUSES.includes(data.status)) {
+        return { valid: false, error: `Status must be one of: ${VALID_STATUSES.join(', ')}` };
+    }
+    return { valid: true };
+}
 // Create incident
 router.post('/', async (req, res) => {
     const sql = (0, db_1.getDb)();
@@ -72,6 +100,11 @@ router.post('/', async (req, res) => {
     }
     if (!title) {
         return res.status(400).json({ success: false, message: 'Title is required' });
+    }
+    // БЕЗОПАСНОСТЬ: Валидация длины входных данных
+    const validation = validateIncidentInput({ title, description, severity });
+    if (!validation.valid) {
+        return res.status(400).json({ success: false, message: validation.error });
     }
     const result = await sql `
     INSERT INTO incidents (title, description, severity, affected_services) 
@@ -96,6 +129,11 @@ router.post('/update', async (req, res) => {
     if (!incidentId || !status || !message) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
+    // БЕЗОПАСНОСТЬ: Валидация входных данных
+    const validation = validateIncidentInput({ status, message });
+    if (!validation.valid) {
+        return res.status(400).json({ success: false, message: validation.error });
+    }
     await sql `
     INSERT INTO incident_updates (incident_id, status, message) VALUES (${incidentId}, ${status}, ${message})
   `;
@@ -113,6 +151,11 @@ router.put('/:id', async (req, res) => {
     const { title, description, severity, affectedServices, status } = req.body;
     if (!await isAdmin(userId)) {
         return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    // БЕЗОПАСНОСТЬ: Валидация входных данных
+    const validation = validateIncidentInput({ title, description, severity, status });
+    if (!validation.valid) {
+        return res.status(400).json({ success: false, message: validation.error });
     }
     const resolvedAt = status === 'resolved' ? new Date() : null;
     await sql `

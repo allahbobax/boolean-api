@@ -30,13 +30,16 @@ function getDb() {
     return sql;
 }
 // Warm up connection pool - call this early in request lifecycle
+// Optimized for serverless: we don't want to block the thread
 async function warmupDb() {
     try {
         const db = getDb();
-        await db `SELECT 1`;
+        // Non-blocking ping
+        db `SELECT 1`.catch(() => { });
+        console.log('Database warmup initiated (lazy)');
     }
-    catch {
-        // Ignore warmup errors
+    catch (err) {
+        // Ignore errors in warmup
     }
 }
 async function ensureUserSchema() {
@@ -47,25 +50,18 @@ async function ensureUserSchema() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255),
         subscription VARCHAR(50) DEFAULT 'free',
         subscription_end_date TIMESTAMP WITH TIME ZONE,
         registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         is_admin BOOLEAN DEFAULT false,
         is_banned BOOLEAN DEFAULT false,
         email_verified BOOLEAN DEFAULT false,
-        verification_code VARCHAR(6),
-        verification_code_expires TIMESTAMP WITH TIME ZONE,
-        reset_code VARCHAR(6),
-        reset_code_expires TIMESTAMP WITH TIME ZONE,
         settings JSONB DEFAULT '{}',
         avatar TEXT,
         hwid VARCHAR(255)
       )
     `;
         await db `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
-        await db `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code VARCHAR(6)`;
-        await db `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code_expires TIMESTAMP WITH TIME ZONE`;
     }
     catch (error) {
         console.error('Ensure user schema error:', error);

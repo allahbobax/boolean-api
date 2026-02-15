@@ -4,15 +4,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
+// Глобальные обработчики ошибок для отладки
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL: Uncaught Exception:', err);
+    // Не выходим сразу, чтобы успеть записать лог
+    setTimeout(() => process.exit(1), 1000);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
 const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
-const crypto_1 = __importDefault(require("crypto"));
-const db_1 = require("./lib/db");
 const apiKeyAuth_1 = require("./lib/apiKeyAuth");
 const rateLimit_1 = require("./lib/rateLimit");
-const csrf_1 = require("./lib/csrf");
 const logger_1 = require("./lib/logger");
 // Routes
 const health_1 = __importDefault(require("./routes/health"));
@@ -28,76 +34,63 @@ const friends_1 = __importDefault(require("./routes/friends"));
 const client_1 = __importDefault(require("./routes/client"));
 const status_1 = __importDefault(require("./routes/status"));
 const app = (0, express_1.default)();
-// Warm up DB connection early (non-blocking)
-(0, db_1.warmupDb)();
-// CORS configuration
+app.disable('x-powered-by');
+// CORS configuration constants
 const allowedOriginPatterns = [
     /^http:\/\/localhost(?::\d+)?$/,
     /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
-    /^https:\/\/(?:www\.)?booleanclient\.ru$/,
-    /^https:\/\/.*\.booleanclient\.ru$/,
+    /^https?:\/\/.*\.onrender\.com$/,
+    /^https?:\/\/.*\.railway\.app$/,
+    /^https?:\/\/.*\.up\.railway\.app$/,
+    /^https?:\/\/.*\.infinityfree\.com$/,
+    /^https?:\/\/.*\.xisedlc\.lol$/,
+    /^https?:\/\/xisedlc\.lol$/,
 ];
+// CORS configuration using the official package
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        // Only allow requests without origin in development mode
-        if (!origin) {
-            if (process.env.NODE_ENV === 'development') {
-                return callback(null, true);
-            }
-            return callback(new Error('Origin required'), false);
-        }
+        if (!origin)
+            return callback(null, true);
         const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
         if (isAllowed) {
-            callback(null, origin);
+            callback(null, true);
         }
         else {
-            // Reject unknown origins in production
-            callback(new Error('CORS not allowed'), false);
+            // Для разработки можно разрешить, но в проде лучше ограничить
+            callback(null, false);
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-    maxAge: 86400
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'x-api-key']
 }));
-// Handle preflight requests explicitly
-app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
 // Security headers
 app.use((0, helmet_1.default)({
     hsts: {
-        maxAge: 31536000, // 1 год
+        maxAge: 31536000,
         includeSubDomains: true,
         preload: true
     },
     contentSecurityPolicy: {
+        useDefaults: true,
         directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
+            "default-src": ["'self'"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://challenges.cloudflare.com"],
+            "script-src": ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+            "img-src": ["'self'", "data:", "https://xisedlc.lol", "https://challenges.cloudflare.com"],
+            "connect-src": ["'self'", "https://challenges.cloudflare.com", "https://api.xisedlc.lol"],
+            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "frame-src": ["'self'", "https://challenges.cloudflare.com"],
+            "frame-ancestors": ["'self'", "https://xisedlc.lol", "https://www.xisedlc.lol", "https://xisedlc.lol"],
         }
     },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
-// Global rate limiting
+// Global rate limiting except for health check routes
 app.use(rateLimit_1.generalLimiter);
-// CSRF token endpoint (must be before csrfProtection middleware)
-// Rate limited to prevent token flooding attacks
-app.get('/csrf-token', rateLimit_1.generalLimiter, async (req, res) => {
-    const sessionId = req.cookies?.sessionId || crypto_1.default.randomUUID();
-    const csrfToken = await (0, csrf_1.generateCsrfToken)(sessionId);
-    // Set session cookie
-    res.cookie('sessionId', sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 3600000 // 1 hour
-    });
-    res.json({ csrfToken });
-});
-// API Key protection for sensitive routes (must be before CSRF)
+// API Key protection for all routes
 app.use(apiKeyAuth_1.apiKeyAuth);
 // Root endpoint
 app.get('/', (_req, res) => {
@@ -105,10 +98,10 @@ app.get('/', (_req, res) => {
 });
 // API Routes
 app.use('/health', health_1.default);
-app.use('/auth', csrf_1.csrfProtection, auth_1.default);
+app.use('/auth', auth_1.default);
 app.use('/oauth', oauth_1.default);
-app.use('/users', csrf_1.csrfProtection, users_1.default);
-app.use('/hwid', csrf_1.csrfProtection, hwid_1.default);
+app.use('/users', users_1.default);
+app.use('/hwid', hwid_1.default);
 app.use('/keys', keys_1.default);
 app.use('/incidents', incidents_1.default);
 app.use('/versions', versions_1.default);
@@ -120,13 +113,54 @@ app.use('/status', status_1.default);
 app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Not found' });
 });
+// Background Status Checker (for persistent environments like Railway/Render)
+if (process.env.NODE_ENV !== 'test') {
+    const STATUS_CHECK_INTERVAL = 60000; // 1 minute
+    const runBackgroundCheck = async () => {
+        try {
+            // We can use the existing check logic by hitting our own endpoint or calling the logic directly
+            // Here we hit the internal /status/check endpoint
+            const internalApiKey = process.env.STATUS_PAGE_API_KEY || process.env.INTERNAL_API_KEY;
+            const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
+            await fetch(`${baseUrl}/status/check`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': internalApiKey || ''
+                }
+            });
+            logger_1.logger.info('Background status check completed');
+        }
+        catch (err) {
+            logger_1.logger.error('Background status check failed', { error: err });
+        }
+    };
+    // Run initial check after server start
+    setTimeout(runBackgroundCheck, 10000);
+    // Then run periodically
+    setInterval(runBackgroundCheck, STATUS_CHECK_INTERVAL);
+}
 // Error handler
 app.use((err, req, res, _next) => {
     logger_1.logger.error('Server error', {
         endpoint: req.path,
         method: req.method,
-        ip: req.ip
+        ip: req.ip,
+        error: err.message
     });
     res.status(500).json({ success: false, message: 'Internal server error' });
 });
-exports.default = app;
+// Start server
+if (process.env.NODE_ENV !== 'test') {
+    const PORT = process.env.PORT || 3000;
+    if (isNaN(Number(PORT))) {
+        console.error('CRITICAL: Invalid PORT configuration:', process.env.PORT);
+        process.exit(1);
+    }
+    console.log('Starting server on port:', PORT);
+    // Ensure we listen on all interfaces for Docker/Railway
+    app.listen(Number(PORT), '0.0.0.0', () => {
+        logger_1.logger.info(`Server is running on port ${PORT}`);
+        console.log(`Server is running on port ${PORT}`);
+    });
+}

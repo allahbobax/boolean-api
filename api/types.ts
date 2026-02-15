@@ -2,7 +2,6 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  password?: string;
   subscription: string;
   subscription_end_date?: string | null;
   avatar?: string | null;
@@ -14,13 +13,6 @@ export interface User {
   hwid?: string | null;
   oauth_provider?: string | null;
   oauth_id?: string | null;
-  verification_code?: string | null;
-  verification_code_expires?: string | null;
-  reset_code?: string | null;
-  reset_code_expires?: string | null;
-  failed_login_attempts?: number | null;
-  account_locked_until?: string | null;
-  last_failed_login?: string | null;
 }
 
 export interface MappedUser {

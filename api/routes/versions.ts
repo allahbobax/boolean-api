@@ -82,7 +82,7 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'URL должен использовать HTTPS' });
     }
     // Опционально: ограничить домены
-    const allowedDomains = ['booleanclient.ru', 'github.com', 'cdn.booleanclient.ru'];
+    const allowedDomains = ['xisedlc.lol', 'github.com', 'cdn.xisedlc.lol'];
     if (!allowedDomains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
       return res.status(400).json({ success: false, message: 'URL должен быть с разрешенного домена' });
     }
@@ -116,7 +116,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       if (url.protocol !== 'https:') {
         return res.status(400).json({ success: false, message: 'URL должен использовать HTTPS' });
       }
-      const allowedDomains = ['booleanclient.ru', 'github.com', 'cdn.booleanclient.ru'];
+      const allowedDomains = ['xisedlc.lol', 'github.com', 'cdn.xisedlc.lol'];
       if (!allowedDomains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`))) {
         return res.status(400).json({ success: false, message: 'URL должен быть с разрешенного домена' });
       }

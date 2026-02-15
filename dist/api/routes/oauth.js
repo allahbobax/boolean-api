@@ -6,33 +6,39 @@ const userMapper_1 = require("../lib/userMapper");
 const oauth_1 = require("../lib/oauth");
 const logger_1 = require("../lib/logger");
 const router = (0, express_1.Router)();
+// БЕЗОПАСНОСТЬ: Проверка настройки OAuth провайдеров
+const isOAuthConfigured = () => {
+    const hasGoogle = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    const hasDiscord = !!(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET);
+    return { hasGoogle, hasDiscord };
+};
 // OAuth redirect
 router.get('/:provider', async (req, res) => {
     const provider = req.params.provider;
     const redirect = req.query.redirect;
     const hwid = req.query.hwid;
-    if (!['github', 'google', 'yandex'].includes(provider)) {
+    if (!['google', 'discord'].includes(provider)) {
         return res.status(400).json({ success: false, message: 'Invalid provider' });
     }
-    const frontendUrl = process.env.FRONTEND_URL || 'https://booleanclient.ru';
+    // БЕЗОПАСНОСТЬ: Проверяем настройку провайдера
+    const config = isOAuthConfigured();
+    if (provider === 'google' && !config.hasGoogle) {
+        return res.status(503).json({ success: false, message: 'Google OAuth не настроен' });
+    }
+    if (provider === 'discord' && !config.hasDiscord) {
+        return res.status(503).json({ success: false, message: 'Discord OAuth не настроен' });
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
     const isLauncher = redirect === 'launcher';
-    const redirectUris = {
-        github: isLauncher
-            ? `http://localhost:3000/api/oauth?provider=${provider}&action=callback`
-            : `${frontendUrl}/api/oauth?provider=${provider}&action=callback`,
-        google: `${frontendUrl}/api/oauth?provider=${provider}&action=callback`,
-        yandex: `${frontendUrl}/api/oauth?provider=${provider}&action=callback`
-    };
-    const redirectUri = redirectUris[provider];
+    const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
     const stateObj = {
         source: isLauncher ? 'launcher' : 'web',
         hwid: hwid || null
     };
     const state = (0, oauth_1.encodeState)(stateObj);
     const urls = {
-        github: `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent('user:email')}&state=${state}`,
         google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('profile email')}&access_type=offline&state=${state}`,
-        yandex: `https://oauth.yandex.ru/authorize?client_id=${process.env.YANDEX_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`
+        discord: `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('identify email')}&state=${state}`
     };
     return res.redirect(urls[provider]);
 });
@@ -43,7 +49,7 @@ router.get('/:provider/callback', async (req, res) => {
     const error = req.query.error;
     const state = req.query.state;
     const redirect = req.query.redirect;
-    const frontendUrl = process.env.FRONTEND_URL || 'https://booleanclient.ru';
+    const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
     const stateData = (0, oauth_1.decodeState)(state || null);
     const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
     const hwid = stateData.hwid;
@@ -57,14 +63,11 @@ router.get('/:provider/callback', async (req, res) => {
         const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
         let profile;
         switch (provider) {
-            case 'github':
-                profile = await (0, oauth_1.handleGitHub)(code);
-                break;
             case 'google':
                 profile = await (0, oauth_1.handleGoogle)(code, redirectUri);
                 break;
-            case 'yandex':
-                profile = await (0, oauth_1.handleYandex)(code);
+            case 'discord':
+                profile = await (0, oauth_1.handleDiscord)(code, redirectUri);
                 break;
             default:
                 throw new Error('Invalid provider');
@@ -101,16 +104,15 @@ router.get('/:provider/exchange', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Invalid source' });
     }
     try {
+        const frontendUrl = process.env.FRONTEND_URL || 'xisidlc.lol';
+        const redirectUri = `${frontendUrl}/api/oauth?provider=${provider}&action=callback`;
         let profile;
         switch (provider) {
-            case 'github':
-                profile = await (0, oauth_1.handleGitHub)(code);
-                break;
             case 'google':
-                profile = await (0, oauth_1.handleGoogle)(code, '');
+                profile = await (0, oauth_1.handleGoogle)(code, redirectUri);
                 break;
-            case 'yandex':
-                profile = await (0, oauth_1.handleYandex)(code);
+            case 'discord':
+                profile = await (0, oauth_1.handleDiscord)(code, redirectUri);
                 break;
             default:
                 throw new Error('Invalid provider');

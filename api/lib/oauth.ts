@@ -6,7 +6,7 @@ import { logger } from './logger';
 
 const OAUTH_USER_FIELDS = 'id, username, email, subscription, subscription_end_date, avatar, registered_at, is_admin, is_banned, email_verified, hwid, oauth_provider, oauth_id';
 
-interface OAuthProfile {
+export interface OAuthProfile {
   id: string;
   email: string | null;
   name: string;
@@ -40,10 +40,9 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile, provider: str
     counter++;
   }
 
-  const randomPassword = crypto.randomUUID();
   const result = await sql<User[]>`
-    INSERT INTO users (username, email, password, oauth_provider, oauth_id, email_verified, subscription, avatar, hwid) 
-    VALUES (${uniqueUsername}, ${email}, ${randomPassword}, ${provider}, ${profile.id}, true, 'free', ${profile.avatar ?? null}, ${hwid ?? null}) 
+    INSERT INTO users (username, email, oauth_provider, oauth_id, email_verified, subscription, avatar, hwid) 
+    VALUES (${uniqueUsername}, ${email}, ${provider}, ${profile.id}, true, 'free', ${profile.avatar ?? null}, ${hwid ?? null}) 
     RETURNING ${sql.unsafe(OAUTH_USER_FIELDS)}
   `;
   return result[0];

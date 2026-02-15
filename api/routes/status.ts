@@ -264,7 +264,7 @@ router.post('/check', async (req: Request, res: Response) => {
       });
     }
 
-    const API_URL = 'https://api.booleanclient.ru';
+    const API_URL = 'https://api.xisedlc.lol';
 
     // Check all services using lightweight ping endpoints
     const [authStatus, apiStatus, siteStatus, launcherStatus] = await Promise.all([

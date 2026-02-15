@@ -26,7 +26,7 @@ router.get('/', async (_req, res) => {
     const sql = (0, db_1.getDb)();
     const result = await sql `
     SELECT id, username, email, subscription, subscription_end_date, registered_at, 
-           is_admin, is_banned, email_verified, settings, hwid 
+           is_admin, is_banned, email_verified, settings, hwid, avatar 
     FROM users ORDER BY id DESC
   `;
     const users = result.map(dbUser => ({
@@ -40,7 +40,8 @@ router.get('/', async (_req, res) => {
         isBanned: dbUser.is_banned,
         emailVerified: dbUser.email_verified,
         settings: dbUser.settings,
-        hwid: dbUser.hwid
+        hwid: dbUser.hwid,
+        avatar: dbUser.avatar
     }));
     return res.json({ success: true, data: users });
 });
@@ -49,7 +50,7 @@ router.get('/:id', async (req, res) => {
     const sql = (0, db_1.getDb)();
     const id = req.params.id;
     const result = await sql `
-    SELECT id, username, email, password, subscription, subscription_end_date, avatar, 
+    SELECT id, username, email, subscription, subscription_end_date, avatar, 
            registered_at, is_admin, is_banned, email_verified, settings, hwid 
     FROM users WHERE id = ${id}
   `;
@@ -119,7 +120,7 @@ router.patch('/:id', async (req, res) => {
             await sql `UPDATE users SET ${sql(dbField)} = ${value} WHERE id = ${id}`;
         }
         const result = await sql `
-      SELECT id, username, email, password, subscription, subscription_end_date, avatar, 
+      SELECT id, username, email, subscription, subscription_end_date, avatar, 
              registered_at, is_admin, is_banned, email_verified, settings, hwid 
       FROM users WHERE id = ${id}
     `;

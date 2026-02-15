@@ -6,9 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.findOrCreateOAuthUser = findOrCreateOAuthUser;
 exports.encodeState = encodeState;
 exports.decodeState = decodeState;
-exports.handleGitHub = handleGitHub;
 exports.handleGoogle = handleGoogle;
-exports.handleYandex = handleYandex;
+exports.handleDiscord = handleDiscord;
 const db_1 = require("./db");
 const crypto_1 = __importDefault(require("crypto"));
 const fetchWithTimeout_1 = require("./fetchWithTimeout");
@@ -37,10 +36,9 @@ async function findOrCreateOAuthUser(profile, provider, hwid) {
         uniqueUsername = `${username}_${counter}`;
         counter++;
     }
-    const randomPassword = crypto_1.default.randomUUID();
     const result = await sql `
-    INSERT INTO users (username, email, password, oauth_provider, oauth_id, email_verified, subscription, avatar, hwid) 
-    VALUES (${uniqueUsername}, ${email}, ${randomPassword}, ${provider}, ${profile.id}, true, 'free', ${profile.avatar ?? null}, ${hwid ?? null}) 
+    INSERT INTO users (username, email, oauth_provider, oauth_id, email_verified, subscription, avatar, hwid) 
+    VALUES (${uniqueUsername}, ${email}, ${provider}, ${profile.id}, true, 'free', ${profile.avatar ?? null}, ${hwid ?? null}) 
     RETURNING ${sql.unsafe(OAUTH_USER_FIELDS)}
   `;
     return result[0];
@@ -97,36 +95,6 @@ function decodeState(stateStr) {
         return { source: stateStr };
     }
 }
-async function handleGitHub(code) {
-    try {
-        const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://github.com/login/oauth/access_token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code })
-        }, 10000);
-        const tokens = await tokenResponse.json();
-        if (!tokens.access_token)
-            throw new Error('Token failed');
-        const userResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://api.github.com/user', {
-            headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-        }, 10000);
-        const profile = await userResponse.json();
-        let email = profile.email;
-        if (!email) {
-            const emailsResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://api.github.com/user/emails', {
-                headers: { Authorization: `Bearer ${tokens.access_token}`, 'User-Agent': 'Boolean-API' }
-            }, 10000);
-            const emails = await emailsResponse.json();
-            const primaryEmail = emails.find(e => e.primary);
-            email = primaryEmail ? primaryEmail.email : null;
-        }
-        return { id: profile.id.toString(), email, name: profile.name || profile.login, login: profile.login, avatar: profile.avatar_url };
-    }
-    catch (error) {
-        logger_1.logger.error('GitHub OAuth failed', { provider: 'github' });
-        throw error;
-    }
-}
 async function handleGoogle(code, redirectUri) {
     try {
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://oauth2.googleapis.com/token', {
@@ -151,28 +119,39 @@ async function handleGoogle(code, redirectUri) {
         throw error;
     }
 }
-async function handleYandex(code) {
+async function handleDiscord(code, redirectUri) {
     try {
-        const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://oauth.yandex.ru/token', {
+        const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://discord.com/api/oauth2/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
-                grant_type: 'authorization_code', code, client_id: process.env.YANDEX_CLIENT_ID, client_secret: process.env.YANDEX_CLIENT_SECRET
+                client_id: process.env.DISCORD_CLIENT_ID,
+                client_secret: process.env.DISCORD_CLIENT_SECRET,
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: redirectUri
             })
         }, 10000);
         const tokens = await tokenResponse.json();
         if (!tokens.access_token)
             throw new Error('Token failed');
-        const userResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://login.yandex.ru/info?format=json', {
-            headers: { Authorization: `OAuth ${tokens.access_token}` }
+        const userResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${tokens.access_token}` }
         }, 10000);
         const profile = await userResponse.json();
-        const avatarId = profile.default_avatar_id;
-        const avatar = avatarId ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200` : null;
-        return { id: profile.id, email: profile.default_email || `${profile.id}@yandex.oauth`, name: profile.display_name || profile.login, avatar };
+        const avatar = profile.avatar
+            ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=256`
+            : null;
+        return {
+            id: profile.id,
+            email: profile.email || `${profile.id}@discord.oauth`,
+            name: profile.global_name || profile.username,
+            login: profile.username,
+            avatar
+        };
     }
     catch (error) {
-        logger_1.logger.error('Yandex OAuth failed', { provider: 'yandex' });
+        logger_1.logger.error('Discord OAuth failed', { provider: 'discord' });
         throw error;
     }
 }

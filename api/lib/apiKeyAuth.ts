@@ -30,15 +30,6 @@ const PUBLIC_ROUTES = [
   '/health/ping', // health check для status page
   '/health/site', // health check для status page
   '/health/launcher', // health check для status page
-  '/auth/login',
-  '/auth/register',
-  '/auth/verify-code',
-  '/auth/resend-code',
-  '/auth/verify-email',
-  '/auth/resend-verification',
-  '/auth/forgot-password',
-  '/auth/verify-reset-code',
-  '/auth/reset-password',
   '/auth/check', // health check для status page
   '/oauth',
   '/status',
@@ -50,8 +41,6 @@ const PUBLIC_ROUTES = [
 
 // Роуты которые требуют только авторизацию пользователя (JWT), но не API ключ
 const USER_AUTH_ROUTES = [
-  '/auth/me',
-  '/auth/logout',
   '/friends',
   '/client',
 ];
@@ -80,6 +69,11 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     // Точное совпадение пути
     return path === route;
   });
+  
+  // Пропускаем health check роуты (по префиксу)
+  if (path.startsWith('/health')) {
+    return next();
+  }
   
   // Пропускаем OAuth роуты (любые подпути)
   // Добавляем проверку на наличие /oauth/ в любой части пути для надежности

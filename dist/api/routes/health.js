@@ -3,16 +3,41 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../lib/db");
 const router = (0, express_1.Router)();
+// Cache for external service checks (site/launcher change rarely)
+let externalCache = { site: null, launcher: null };
+const EXTERNAL_CACHE_TTL = 60000; // 60 seconds cache for external services
 router.get('/site', async (_req, res) => {
+    const now = Date.now();
+    // Return cached result if fresh
+    if (externalCache.site && (now - externalCache.site.timestamp) < EXTERNAL_CACHE_TTL) {
+        return res.status(externalCache.site.status === 'ok' ? 200 : 503).json({
+            ...externalCache.site,
+            cached: true,
+            timestamp: new Date().toISOString()
+        });
+    }
     const start = Date.now();
     try {
-        const response = await fetch('https://booleanclient.ru', { method: 'GET', signal: AbortSignal.timeout(10000) });
+        const response = await fetch('https://xisedlc.lol', {
+            method: 'HEAD', // HEAD faster than GET
+            signal: AbortSignal.timeout(3000) // Reduced from 10s to 3s
+        });
         const responseTime = Date.now() - start;
-        return res.json({ status: response.ok ? 'ok' : 'error', statusCode: response.status, responseTime, timestamp: new Date().toISOString() });
+        const isOk = response.ok;
+        // Cache result
+        externalCache.site = {
+            status: isOk ? 'ok' : 'error',
+            statusCode: response.status,
+            responseTime,
+            timestamp: now
+        };
+        return res.status(isOk ? 200 : 503).json({ status: isOk ? 'ok' : 'error', statusCode: response.status, responseTime, timestamp: new Date().toISOString() });
     }
     catch (error) {
         const responseTime = Date.now() - start;
-        return res.json({ status: 'error', statusCode: 0, responseTime, timestamp: new Date().toISOString(), error: error instanceof Error ? error.message : 'Unknown error' });
+        // Cache error too
+        externalCache.site = { status: 'error', statusCode: 0, responseTime, timestamp: now };
+        return res.status(503).json({ status: 'error', statusCode: 0, responseTime, timestamp: new Date().toISOString(), error: error instanceof Error ? error.message : 'Unknown error' });
     }
 });
 // Check launcher download availability (GitHub releases)
@@ -26,16 +51,37 @@ const LAUNCHER_DOWNLOAD_URLS = [
     'https://github.com/nihmadev/hoka/releases/download/v1/Boolean.Launcher_0.1.0_amd64.AppImage'
 ];
 router.get('/launcher', async (_req, res) => {
+    const now = Date.now();
+    // Return cached result if fresh
+    if (externalCache.launcher && (now - externalCache.launcher.timestamp) < EXTERNAL_CACHE_TTL) {
+        return res.status(externalCache.launcher.status === 'ok' ? 200 : 503).json({
+            ...externalCache.launcher,
+            service: 'launcher',
+            cached: true,
+            timestamp: new Date().toISOString()
+        });
+    }
     const start = Date.now();
     try {
         // Check main download link (Windows EXE)
+        // GitHub releases redirect, so we follow redirects and check final response
         const response = await fetch(LAUNCHER_DOWNLOAD_URLS[0], {
             method: 'HEAD',
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(3000), // Reduced from 10s to 3s
+            redirect: 'follow'
         });
         const responseTime = Date.now() - start;
-        return res.json({
-            status: response.ok ? 'ok' : 'error',
+        // Consider 200-399 as success (includes redirects that were followed)
+        const isOk = response.status >= 200 && response.status < 400;
+        // Cache result
+        externalCache.launcher = {
+            status: isOk ? 'ok' : 'error',
+            statusCode: response.status,
+            responseTime,
+            timestamp: now
+        };
+        return res.status(isOk ? 200 : 503).json({
+            status: isOk ? 'ok' : 'error',
             service: 'launcher',
             statusCode: response.status,
             responseTime,
@@ -44,7 +90,9 @@ router.get('/launcher', async (_req, res) => {
     }
     catch (error) {
         const responseTime = Date.now() - start;
-        return res.json({
+        // Cache error too
+        externalCache.launcher = { status: 'error', statusCode: 0, responseTime, timestamp: now };
+        return res.status(503).json({
             status: 'error',
             service: 'launcher',
             responseTime,
@@ -53,34 +101,15 @@ router.get('/launcher', async (_req, res) => {
         });
     }
 });
-// Lightweight ping endpoint for status checks (no heavy DB queries)
-router.get('/ping', async (_req, res) => {
-    try {
-        const sql = (0, db_1.getDb)();
-        await sql `SELECT 1`;
-        return res.json({ status: 'ok', timestamp: new Date().toISOString() });
-    }
-    catch (error) {
-        console.error('Health ping error:', error);
-        return res.status(500).json({ status: 'error', timestamp: new Date().toISOString() });
-    }
+// Lightweight ping endpoint for status checks (no DB queries - just checks if API is alive)
+router.get('/ping', (_req, res) => {
+    return res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 router.get('/', async (_req, res) => {
     try {
         const sql = (0, db_1.getDb)();
-        await (0, db_1.ensureKeysTable)();
-        const [usersResult, activeSubsResult, keysResult, incidentsResult] = await Promise.all([
-            sql `SELECT COUNT(*) as count FROM users`,
-            sql `SELECT COUNT(*) as count FROM users WHERE subscription_end_date > NOW()`,
-            sql `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE used = false) as available FROM keys`,
-            sql `SELECT COUNT(*) as count FROM incidents WHERE status != 'resolved'`
-        ]);
-        const stats = {
-            users: { total: parseInt(usersResult[0]?.count || '0'), activeSubscriptions: parseInt(activeSubsResult[0]?.count || '0') },
-            keys: { total: parseInt(keysResult[0]?.total || '0'), available: parseInt(keysResult[0]?.available || '0') },
-            incidents: { active: parseInt(incidentsResult[0]?.count || '0') }
-        };
-        return res.json({ status: 'ok', timestamp: new Date().toISOString(), stats });
+        await sql `SELECT 1`;
+        return res.json({ status: 'ok', timestamp: new Date().toISOString() });
     }
     catch (error) {
         console.error('Health check error:', error);
