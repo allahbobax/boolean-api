@@ -65,7 +65,7 @@ router.get('/:provider/callback', async (req, res) => {
         if (isLauncher) {
             return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
         }
-        return res.redirect(`${frontendUrl}/auth?error=${provider}_failed`);
+        return res.redirect(`${frontendUrl}/dashboard?error=${provider}_failed`);
     }
     try {
         const redirectUri = `${frontendUrl}/api/oauth/${provider}/callback`;
