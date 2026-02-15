@@ -85,6 +85,11 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
   const hwid = stateData.hwid as string | undefined;
 
+  // LOGGING: Отладка входящего callback
+  console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+  console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
+  console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
+
   if (error || !code) {
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);

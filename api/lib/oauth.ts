@@ -71,6 +71,7 @@ export function decodeState(stateStr: string | null): Record<string, unknown> {
   
   try {
     const decoded = Buffer.from(stateStr, 'base64url').toString('utf-8');
+    // Попробуем распарсить как JSON
     if (decoded.trim().startsWith('{')) {
       const parsed = JSON.parse(decoded);
       
@@ -92,13 +93,16 @@ export function decodeState(stateStr: string | null): Record<string, unknown> {
           logger.warn('State expired');
           return {};
         }
+        
+        return parsed;
       }
       
+      // Для старых state или без подписи (если вдруг такие есть)
       return parsed;
     }
     return { source: stateStr };
   } catch (error) {
-    logger.warn('Failed to decode state');
+    // Если не получилось распарсить как base64/json, возможно это простой текст
     return { source: stateStr };
   }
 }
