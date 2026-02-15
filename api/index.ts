@@ -51,6 +51,8 @@ const allowedOriginPatterns = [
   /^https?:\/\/status\.booleanclient\.ru$/,
   /^https?:\/\/.*\.onrender\.com$/,
   /^https?:\/\/.*\.infinityfree\.com$/,
+  /^https?:\/\/.*\.xisedlc\.lol$/,
+  /^https?:\/\/xisedlc\.lol$/,
 ];
 
 // CORS configuration using the official package

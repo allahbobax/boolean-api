@@ -81,7 +81,8 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     return path === route;
   });
   
-  if (isPublicRoute) {
+  // Пропускаем OAuth роуты (любые подпути)
+  if (isPublicRoute || path.startsWith('/oauth')) {
     return next();
   }
   
