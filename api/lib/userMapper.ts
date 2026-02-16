@@ -18,6 +18,7 @@ export function mapUserFromDb(dbUser: User): MappedUser {
     emailVerified: dbUser.email_verified,
     settings: dbUser.settings ? JSON.parse(dbUser.settings) : undefined,
     hwid: dbUser.hwid || null
+    
   };
 }
 
@@ -37,7 +38,6 @@ export function mapOAuthUser(dbUser: User, token: string) {
     isAdmin: dbUser.is_admin || false,
     isBanned: dbUser.is_banned || false,
     emailVerified: true,
-    hwid: dbUser.hwid || null,
-    token
+    hwid: dbUser.hwid || null
   };
 }
