@@ -47,9 +47,9 @@ router.get('/:provider', async (req, res) => {
         discord: `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('identify email')}&state=${state}`
     };
     // LOGGING: Отладочная информация для поиска проблемы с redirect_uri
-    console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
-    console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
-    console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
+    // console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
+    // console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
+    // console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
     return res.redirect(urls[provider]);
 });
 // OAuth callback
@@ -69,9 +69,9 @@ router.get('/:provider/callback', async (req, res) => {
     const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
     const hwid = stateData.hwid;
     // LOGGING: Отладка входящего callback
-    console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-    console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
-    console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
+    // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+    // console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
+    // console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
     if (error || !code) {
         if (isLauncher) {
             return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
@@ -82,9 +82,10 @@ router.get('/:provider/callback', async (req, res) => {
         // Callback URI должен совпадать с тем, что был при старте
         const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
         // LOGGING: Отладка входящего callback
-        console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-        console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
+        // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+        // console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
         let profile;
+        // console.log(`OAuth Callback [${provider}]: Start handling provider...`);
         switch (provider) {
             case 'google':
                 profile = await (0, oauth_1.handleGoogle)(code, redirectUri);
@@ -95,7 +96,10 @@ router.get('/:provider/callback', async (req, res) => {
             default:
                 throw new Error('Invalid provider');
         }
+        // console.log(`OAuth Callback [${provider}]: Provider handled successfully, profile id: ${profile.id}`);
+        // console.log(`OAuth Callback [${provider}]: Find or create user...`);
         const user = await (0, oauth_1.findOrCreateOAuthUser)(profile, provider, hwid);
+        // console.log(`OAuth Callback [${provider}]: User found/created: ${user.id}`);
         const token = await (0, jwt_1.generateToken)(user);
         const userData = (0, userMapper_1.mapOAuthUser)(user, token);
         const encodedUser = encodeURIComponent(JSON.stringify(userData));
@@ -105,7 +109,8 @@ router.get('/:provider/callback', async (req, res) => {
         return res.redirect(`${frontendUrl}/dashboard?auth=success&user=${encodedUser}`);
     }
     catch (err) {
-        logger_1.logger.error('OAuth callback failed', { provider, ip: req.ip });
+        logger_1.logger.error('OAuth callback failed', { provider, ip: req.ip, error: err });
+        // console.error(`OAuth Callback [${provider}]: FAILED`, err);
         if (isLauncher) {
             return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
         }

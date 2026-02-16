@@ -57,9 +57,9 @@ router.get('/:provider', async (req: Request, res: Response) => {
   };
   
   // LOGGING: Отладочная информация для поиска проблемы с redirect_uri
-  console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
-  console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
-  console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
+  // console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
+  // console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
+  // console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
 
   return res.redirect(urls[provider]);
 });
@@ -86,9 +86,9 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const hwid = stateData.hwid as string | undefined;
 
   // LOGGING: Отладка входящего callback
-  console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-  console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
-  console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
+  // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+  // console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
+  // console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
 
   if (error || !code) {
     if (isLauncher) {
@@ -102,11 +102,11 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
     
     // LOGGING: Отладка входящего callback
-    console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-    console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
+    // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
+    // console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
 
     let profile;
-    console.log(`OAuth Callback [${provider}]: Start handling provider...`);
+    // console.log(`OAuth Callback [${provider}]: Start handling provider...`);
     switch (provider) {
       case 'google':
         profile = await handleGoogle(code, redirectUri);
@@ -117,11 +117,11 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
       default:
         throw new Error('Invalid provider');
     }
-    console.log(`OAuth Callback [${provider}]: Provider handled successfully, profile id: ${profile.id}`);
+    // console.log(`OAuth Callback [${provider}]: Provider handled successfully, profile id: ${profile.id}`);
 
-    console.log(`OAuth Callback [${provider}]: Find or create user...`);
+    // console.log(`OAuth Callback [${provider}]: Find or create user...`);
     const user = await findOrCreateOAuthUser(profile, provider, hwid);
-    console.log(`OAuth Callback [${provider}]: User found/created: ${user.id}`);
+    // console.log(`OAuth Callback [${provider}]: User found/created: ${user.id}`);
     
     const token = await generateToken(user);
     const userData = mapOAuthUser(user, token);
@@ -134,7 +134,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     return res.redirect(`${frontendUrl}/dashboard?auth=success&user=${encodedUser}`);
   } catch (err) {
     logger.error('OAuth callback failed', { provider, ip: req.ip, error: err });
-    console.error(`OAuth Callback [${provider}]: FAILED`, err);
+    // console.error(`OAuth Callback [${provider}]: FAILED`, err);
 
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);

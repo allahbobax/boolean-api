@@ -116,9 +116,6 @@ export async function handleGoogle(code: string, redirectUri: string): Promise<O
       redirect_uri: redirectUri, 
       grant_type: 'authorization_code'
     });
-    
-    // LOGGING: Google Token Request
-    console.log(`Google OAuth: Requesting token with redirect_uri=${redirectUri}`);
 
     const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -132,7 +129,6 @@ export async function handleGoogle(code: string, redirectUri: string): Promise<O
     
     if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
-        console.error('Google Token Error:', errorText);
         throw new Error(`Google Token Failed: ${tokenResponse.status} ${errorText}`);
     }
 
@@ -145,7 +141,6 @@ export async function handleGoogle(code: string, redirectUri: string): Promise<O
     
     if (!userResponse.ok) {
         const errorText = await userResponse.text();
-        console.error('Google UserInfo Error:', errorText);
         throw new Error(`Google UserInfo Failed: ${userResponse.status}`);
     }
 
@@ -166,10 +161,6 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
         code,
         redirect_uri: redirectUri
       });
-
-    // LOGGING: Discord Token Request
-    console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
-
     const tokenResponse = await fetchWithTimeout('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: { 
@@ -182,7 +173,6 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
     
     if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
-        console.error('Discord Token Error:', errorText);
         throw new Error(`Discord Token Failed: ${tokenResponse.status} ${errorText}`);
     }
 
@@ -195,7 +185,6 @@ export async function handleDiscord(code: string, redirectUri: string): Promise<
     
     if (!userResponse.ok) {
         const errorText = await userResponse.text();
-        console.error('Discord UserInfo Error:', errorText);
         throw new Error(`Discord UserInfo Failed: ${userResponse.status}`);
     }
 

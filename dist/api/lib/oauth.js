@@ -107,8 +107,6 @@ async function handleGoogle(code, redirectUri) {
             redirect_uri: redirectUri,
             grant_type: 'authorization_code'
         });
-        // LOGGING: Google Token Request
-        console.log(`Google OAuth: Requesting token with redirect_uri=${redirectUri}`);
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
@@ -120,7 +118,6 @@ async function handleGoogle(code, redirectUri) {
         }, 15000); // Увеличен таймаут
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
-            console.error('Google Token Error:', errorText);
             throw new Error(`Google Token Failed: ${tokenResponse.status} ${errorText}`);
         }
         const tokens = await tokenResponse.json();
@@ -131,7 +128,6 @@ async function handleGoogle(code, redirectUri) {
         }, 10000);
         if (!userResponse.ok) {
             const errorText = await userResponse.text();
-            console.error('Google UserInfo Error:', errorText);
             throw new Error(`Google UserInfo Failed: ${userResponse.status}`);
         }
         const profile = await userResponse.json();
@@ -152,19 +148,19 @@ async function handleDiscord(code, redirectUri) {
             redirect_uri: redirectUri
         });
         // LOGGING: Discord Token Request
-        console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
+        // console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://discord.com/api/oauth2/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'BooleanApp/1.0 (https://xisedlc.lol, 1.0.0)',
+                'User-Agent': 'XiSeDLC/1.0 (https://xisedlc.lol, 1.0.0)',
                 'Accept': 'application/json'
             },
             body: params
         }, 15000); // Увеличен таймаут
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
-            console.error('Discord Token Error:', errorText);
+            // console.error('Discord Token Error:', errorText);
             throw new Error(`Discord Token Failed: ${tokenResponse.status} ${errorText}`);
         }
         const tokens = await tokenResponse.json();
@@ -175,7 +171,7 @@ async function handleDiscord(code, redirectUri) {
         }, 10000);
         if (!userResponse.ok) {
             const errorText = await userResponse.text();
-            console.error('Discord UserInfo Error:', errorText);
+            // console.error('Discord UserInfo Error:', errorText);
             throw new Error(`Discord UserInfo Failed: ${userResponse.status}`);
         }
         const profile = await userResponse.json();
