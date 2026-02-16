@@ -43,12 +43,6 @@ import client from './routes/client';
 import status from './routes/status';
 import { startMonitoring } from './lib/statusMonitor';
 
-// MARKER: VERSION 1.1 - DEBUGGING OAUTH
-console.log('---------------------------------------------------');
-console.log('       BOOLEAN API - STARTING - VERSION 1.1        ');
-console.log('       DEBUGGING OAUTH CALLBACK ISSUES             ');
-console.log('---------------------------------------------------');
-
 const app = express();
 app.disable('x-powered-by');
 
@@ -175,15 +169,12 @@ if (process.env.NODE_ENV !== 'test') {
 
   const startServer = async () => {
     try {
-      // Initialize Database Schema
-      console.log('Initializing database schema...');
       await ensureUserSchema();
       await ensureKeysTable();
       await ensureLicenseKeysTable();
       await ensureIncidentsTables();
       await ensureFriendshipsTable();
       await ensureVersionsTable();
-      console.log('Database schema initialized');
 
       console.log('Starting server on port:', PORT);
       // Ensure we listen on all interfaces for Docker/Railway

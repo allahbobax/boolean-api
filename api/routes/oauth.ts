@@ -56,9 +56,6 @@ router.get('/:provider', async (req: Request, res: Response) => {
     discord: `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('identify email')}&state=${state}`
   };
   
-  // LOGGING: Отладочная информация для поиска проблемы с redirect_uri
-  logger.info(`OAuth Start [${provider}]`, { redirectUri, frontendUrl: process.env.FRONTEND_URL, authUrl: urls[provider] });
-
   return res.redirect(urls[provider]);
 });
 
@@ -83,15 +80,8 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const isLauncher = redirect === 'launcher' || stateData.source === 'launcher';
   const hwid = stateData.hwid as string | undefined;
 
-  // LOGGING: Отладка входящего callback
-  logger.info(`OAuth Callback [${provider}]`, { 
-    codePrefix: code?.substring(0, 10), 
-    state, 
-    redirectUri: `${cleanApiUrl}/oauth/${provider}/callback`
-  });
-
   if (error || !code) {
-    logger.error('OAuth Callback: Missing code or error present', { error, codePrefix: code?.substring(0, 5) });
+    logger.error('OAuth Callback: Missing code or error present', { error });
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
     }
@@ -102,15 +92,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     // Callback URI должен совпадать с тем, что был при старте
     const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
     
-    // LOGGING: Отладка входящего callback
-    logger.info(`OAuth Callback [${provider}]`, { 
-      codePrefix: code?.substring(0, 10), 
-      state, 
-      redirectUri 
-    });
-
     let profile;
-    logger.info(`OAuth Callback [${provider}]: Start handling provider...`);
     switch (provider) {
       case 'google':
         profile = await handleGoogle(code, redirectUri);
@@ -121,11 +103,8 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
       default:
         throw new Error('Invalid provider');
     }
-    logger.info(`OAuth Callback [${provider}]: Provider handled successfully, profile id: ${profile.id}`);
 
-    logger.info(`OAuth Callback [${provider}]: Find or create user...`);
     const user = await findOrCreateOAuthUser(profile, provider, hwid);
-    logger.info(`OAuth Callback [${provider}]: User found/created: ${user.id}`);
     
     const token = await generateToken(user);
     const userData = mapOAuthUser(user, token);
@@ -137,13 +116,9 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
 
     return res.redirect(`${frontendUrl}/dashboard?auth=success&user=${encodedUser}`);
   } catch (err: any) {
-    console.error('RAW_OAUTH_ERROR:', err);
     logger.error('OAuth callback failed', { 
       provider, 
-      ip: req.ip, 
-      error: err,
-      errorMessage: err?.message || 'No message',
-      errorStack: err?.stack || 'No stack'
+      error: err.message
     });
 
     if (isLauncher) {

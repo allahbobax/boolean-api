@@ -99,8 +99,6 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   }
   
   if (!apiKey || !timingSafeCompare(apiKey as string, INTERNAL_API_KEY)) {
-    // Логируем попытку доступа без ключа для отладки
-    console.log(`[Auth] Access denied for path: ${path}, method: ${method}`);
     
     return res.status(403).json({ 
       success: false, 

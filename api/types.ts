@@ -13,6 +13,8 @@ export interface User {
   hwid?: string | null;
   oauth_provider?: string | null;
   oauth_id?: string | null;
+  username_change_count?: number;
+  last_username_change?: string | null;
 }
 
 export interface MappedUser {
@@ -28,6 +30,8 @@ export interface MappedUser {
   emailVerified: boolean;
   settings?: unknown;
   hwid: string | null;
+  usernameChangeCount?: number;
+  lastUsernameChange?: string | null;
 }
 
 export interface Incident {

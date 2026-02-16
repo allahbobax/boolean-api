@@ -50,12 +50,16 @@ export async function ensureUserSchema() {
         avatar TEXT,
         hwid VARCHAR(255),
         oauth_provider VARCHAR(50),
-        oauth_id VARCHAR(255)
+        oauth_id VARCHAR(255),
+        username_change_count INTEGER DEFAULT 0,
+        last_username_change TIMESTAMP WITH TIME ZONE
       )
     `;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)`;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR(255)`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS username_change_count INTEGER DEFAULT 0`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_username_change TIMESTAMP WITH TIME ZONE`;
   } catch (error) {
     console.error('Ensure user schema error:', error);
   }

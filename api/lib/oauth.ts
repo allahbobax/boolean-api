@@ -3,6 +3,7 @@ import type { User } from '../types';
 import crypto from 'crypto';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import { logger } from './logger';
+import { sanitizeUsername } from './transliteration';
 
 const OAUTH_USER_FIELDS = 'id, username, email, subscription, subscription_end_date, avatar, registered_at, is_admin, is_banned, email_verified, hwid, oauth_provider, oauth_id';
 
@@ -17,7 +18,10 @@ export interface OAuthProfile {
 export async function findOrCreateOAuthUser(profile: OAuthProfile, provider: string, hwid?: string | null): Promise<User> {
   const sql = getDb();
   const email = profile.email || `${profile.id}@${provider}.oauth`;
-  const username = profile.name || profile.login || `${provider}_${profile.id}`;
+  
+  // Применяем транслитерацию и удаление пробелов
+  const rawUsername = profile.name || profile.login || `${provider}_${profile.id}`;
+  const username = sanitizeUsername(rawUsername);
 
   const existing = await sql<User[]>`SELECT ${sql.unsafe(OAUTH_USER_FIELDS)} FROM users WHERE email = ${email}`;
 
