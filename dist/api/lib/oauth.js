@@ -147,8 +147,6 @@ async function handleDiscord(code, redirectUri) {
             code,
             redirect_uri: redirectUri
         });
-        // LOGGING: Discord Token Request
-        // console.log(`Discord OAuth: Requesting token with redirect_uri=${redirectUri}`);
         const tokenResponse = await (0, fetchWithTimeout_1.fetchWithTimeout)('https://discord.com/api/oauth2/token', {
             method: 'POST',
             headers: {
@@ -160,7 +158,6 @@ async function handleDiscord(code, redirectUri) {
         }, 15000); // Увеличен таймаут
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
-            // console.error('Discord Token Error:', errorText);
             throw new Error(`Discord Token Failed: ${tokenResponse.status} ${errorText}`);
         }
         const tokens = await tokenResponse.json();
@@ -171,7 +168,6 @@ async function handleDiscord(code, redirectUri) {
         }, 10000);
         if (!userResponse.ok) {
             const errorText = await userResponse.text();
-            // console.error('Discord UserInfo Error:', errorText);
             throw new Error(`Discord UserInfo Failed: ${userResponse.status}`);
         }
         const profile = await userResponse.json();

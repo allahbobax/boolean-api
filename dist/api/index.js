@@ -17,6 +17,7 @@ const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
 const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const db_1 = require("./lib/db");
 const apiKeyAuth_1 = require("./lib/apiKeyAuth");
 const rateLimit_1 = require("./lib/rateLimit");
 const logger_1 = require("./lib/logger");
@@ -165,10 +166,28 @@ if (process.env.NODE_ENV !== 'test') {
         console.error('CRITICAL: Invalid PORT configuration:', process.env.PORT);
         process.exit(1);
     }
-    console.log('Starting server on port:', PORT);
-    // Ensure we listen on all interfaces for Docker/Railway
-    app.listen(Number(PORT), '0.0.0.0', () => {
-        logger_1.logger.info(`Server is running on port ${PORT}`);
-        console.log(`Server is running on port ${PORT}`);
-    });
+    const startServer = async () => {
+        try {
+            // Initialize Database Schema
+            console.log('Initializing database schema...');
+            await (0, db_1.ensureUserSchema)();
+            await (0, db_1.ensureKeysTable)();
+            await (0, db_1.ensureLicenseKeysTable)();
+            await (0, db_1.ensureIncidentsTables)();
+            await (0, db_1.ensureFriendshipsTable)();
+            await (0, db_1.ensureVersionsTable)();
+            console.log('Database schema initialized');
+            console.log('Starting server on port:', PORT);
+            // Ensure we listen on all interfaces for Docker/Railway
+            app.listen(Number(PORT), '0.0.0.0', () => {
+                logger_1.logger.info(`Server is running on port ${PORT}`);
+                console.log(`Server is running on port ${PORT}`);
+            });
+        }
+        catch (err) {
+            console.error('Failed to start server:', err);
+            process.exit(1);
+        }
+    };
+    startServer();
 }

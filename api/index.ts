@@ -15,7 +15,15 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { warmupDb } from './lib/db';
+import { 
+  warmupDb, 
+  ensureUserSchema, 
+  ensureKeysTable, 
+  ensureLicenseKeysTable, 
+  ensureIncidentsTables,
+  ensureFriendshipsTable,
+  ensureVersionsTable
+} from './lib/db';
 import { apiKeyAuth } from './lib/apiKeyAuth';
 import { generalLimiter } from './lib/rateLimit';
 import { logger } from './lib/logger';
@@ -182,11 +190,30 @@ if (process.env.NODE_ENV !== 'test') {
     process.exit(1);
   }
 
-  console.log('Starting server on port:', PORT);
-  // Ensure we listen on all interfaces for Docker/Railway
-  app.listen(Number(PORT), '0.0.0.0', () => {
-    logger.info(`Server is running on port ${PORT}`);
-    console.log(`Server is running on port ${PORT}`);
-  });
+  const startServer = async () => {
+    try {
+      // Initialize Database Schema
+      console.log('Initializing database schema...');
+      await ensureUserSchema();
+      await ensureKeysTable();
+      await ensureLicenseKeysTable();
+      await ensureIncidentsTables();
+      await ensureFriendshipsTable();
+      await ensureVersionsTable();
+      console.log('Database schema initialized');
+
+      console.log('Starting server on port:', PORT);
+      // Ensure we listen on all interfaces for Docker/Railway
+      app.listen(Number(PORT), '0.0.0.0', () => {
+        logger.info(`Server is running on port ${PORT}`);
+        console.log(`Server is running on port ${PORT}`);
+      });
+    } catch (err) {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  };
+
+  startServer();
 }
 
