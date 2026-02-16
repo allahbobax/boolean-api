@@ -106,6 +106,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
 
     let profile;
+    console.log(`OAuth Callback [${provider}]: Start handling provider...`);
     switch (provider) {
       case 'google':
         profile = await handleGoogle(code, redirectUri);
@@ -116,8 +117,12 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
       default:
         throw new Error('Invalid provider');
     }
+    console.log(`OAuth Callback [${provider}]: Provider handled successfully, profile id: ${profile.id}`);
 
+    console.log(`OAuth Callback [${provider}]: Find or create user...`);
     const user = await findOrCreateOAuthUser(profile, provider, hwid);
+    console.log(`OAuth Callback [${provider}]: User found/created: ${user.id}`);
+    
     const token = await generateToken(user);
     const userData = mapOAuthUser(user, token);
     const encodedUser = encodeURIComponent(JSON.stringify(userData));
@@ -128,7 +133,8 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
 
     return res.redirect(`${frontendUrl}/dashboard?auth=success&user=${encodedUser}`);
   } catch (err) {
-    logger.error('OAuth callback failed', { provider, ip: req.ip });
+    logger.error('OAuth callback failed', { provider, ip: req.ip, error: err });
+    console.error(`OAuth Callback [${provider}]: FAILED`, err);
 
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
