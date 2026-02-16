@@ -41,6 +41,7 @@ import products from './routes/products';
 import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
+import { startMonitoring } from './lib/statusMonitor';
 const app = express();
 app.disable('x-powered-by');
 
@@ -142,32 +143,7 @@ app.use((_req, res) => {
 
 // Background Status Checker (for persistent environments like Railway/Render)
 if (process.env.NODE_ENV !== 'test') {
-  const STATUS_CHECK_INTERVAL = 60000; // 1 minute
-
-  const runBackgroundCheck = async () => {
-    try {
-      // We can use the existing check logic by hitting our own endpoint or calling the logic directly
-      // Here we hit the internal /status/check endpoint
-      const internalApiKey = process.env.STATUS_PAGE_API_KEY || process.env.INTERNAL_API_KEY;
-      const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
-
-      await fetch(`${baseUrl}/status/check`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': internalApiKey || ''
-        }
-      });
-      logger.info('Background status check completed');
-    } catch (err) {
-      logger.error('Background status check failed', { error: err });
-    }
-  };
-
-  // Run initial check after server start
-  setTimeout(runBackgroundCheck, 10000);
-  // Then run periodically
-  setInterval(runBackgroundCheck, STATUS_CHECK_INTERVAL);
+  startMonitoring();
 }
 
 // Error handler

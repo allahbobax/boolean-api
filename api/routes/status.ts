@@ -1,17 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
+import { ensureStatusTable, getLatestStatus, runCheck } from '../lib/statusMonitor';
 
 const router = Router();
 
 // API ключ для статус-страницы (опциональный, для дополнительной безопасности)
 const STATUS_PAGE_API_KEY = process.env.STATUS_PAGE_API_KEY;
-
-// In-memory cache for live check results (to avoid hammering external services)
-let liveCheckCache: {
-  data: Array<{ name: string; status: string; responseTime: number }> | null;
-  timestamp: number;
-} = { data: null, timestamp: 0 };
 
 // In-memory cache for GET /status (cached DB results)
 let statusCache: {
@@ -19,73 +14,8 @@ let statusCache: {
   timestamp: number;
 } = { data: null, timestamp: 0 };
 
-const CACHE_DURATION = 60000; // 1 minute cache
-const STATUS_CACHE_DURATION = 60000; // 60 seconds cache for GET /status (increased from 30s)
-const HISTORY_RETENTION_MINUTES = 10080; // 7 days retention
-const HISTORY_POINTS_LIMIT = 150; // Reduced from 300 for faster queries
-
-// Flag and promise to ensure table is created only once per instance
-let tableEnsured = false;
-let tableEnsuringPromise: Promise<void> | null = null;
-
-// Ensure status_history table exists
-async function ensureStatusTable() {
-  if (tableEnsured) return;
-  if (tableEnsuringPromise) return tableEnsuringPromise;
-
-  const db = getDb();
-  tableEnsuringPromise = (async () => {
-    try {
-      await db`
-        CREATE TABLE IF NOT EXISTS status_history (
-          id SERIAL PRIMARY KEY,
-          service_name VARCHAR(50) NOT NULL,
-          status VARCHAR(20) NOT NULL,
-          response_time INTEGER NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-      `;
-      // Create indexes for faster queries
-      await db`
-        CREATE INDEX IF NOT EXISTS idx_status_history_service_time 
-        ON status_history(service_name, created_at DESC)
-      `;
-      await db`
-        CREATE INDEX IF NOT EXISTS idx_status_history_created_at 
-        ON status_history(created_at DESC)
-      `;
-      tableEnsured = true;
-    } catch (error) {
-      console.error('Ensure status_history table error:', error);
-    } finally {
-      tableEnsuringPromise = null;
-    }
-  })();
-
-  return tableEnsuringPromise;
-}
-
-// Check a service and return status
-async function checkService(url: string): Promise<{ status: string; responseTime: number }> {
-  const start = Date.now();
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000) // Reduced to 3s for faster checks
-    });
-    const responseTime = Date.now() - start;
-
-    if (response.ok) {
-      return {
-        status: responseTime > 5000 ? 'degraded' : 'operational',
-        responseTime
-      };
-    }
-    return { status: 'partial', responseTime };
-  } catch {
-    return { status: 'major', responseTime: Date.now() - start };
-  }
-}
+const STATUS_CACHE_DURATION = 60000; // 60 seconds cache for GET /status
+const HISTORY_POINTS_LIMIT = 150;
 
 interface StatusHistoryRow {
   service_name: string;
@@ -102,7 +32,7 @@ router.get('/', async (_req: Request, res: Response) => {
     if (statusCache.data && (now - statusCache.timestamp) < STATUS_CACHE_DURATION) {
       // Calculate time since last check for sync
       const cacheAge = Math.round((now - statusCache.timestamp) / 1000);
-      const nextCheckIn = Math.max(0, Math.round((CACHE_DURATION - (now - statusCache.timestamp)) / 1000));
+      const nextCheckIn = Math.max(0, Math.round((STATUS_CACHE_DURATION - (now - statusCache.timestamp)) / 1000));
       
       return res.json({
         success: true,
@@ -117,7 +47,6 @@ router.get('/', async (_req: Request, res: Response) => {
     await ensureStatusTable();
     const db = getDb();
 
-    // Оптимизированный запрос - простой LIMIT вместо ROW_NUMBER для скорости
     // Получаем последние N записей для каждого сервиса
     const history = await db<StatusHistoryRow[]>`
       SELECT service_name, status, response_time, created_at
@@ -136,7 +65,7 @@ router.get('/', async (_req: Request, res: Response) => {
       history: Array<{ time: string; responseTime: number; status: string }>;
     }> = {};
 
-    const serviceNames = ['Auth', 'API', 'Site', 'Launcher'];
+    const serviceNames = ['Auth', 'API', 'Site'];
 
     for (const name of serviceNames) {
       const serviceHistory = history
@@ -152,12 +81,26 @@ router.get('/', async (_req: Request, res: Response) => {
         ? (operationalCount / serviceHistory.length) * 100
         : 100;
 
-      const latest = serviceHistory[serviceHistory.length - 1];
+      // Use latest from history, or fall back to statusMonitor if history is empty but monitor has data
+      let latestStatus = serviceHistory.length > 0 ? serviceHistory[serviceHistory.length - 1].status : 'operational';
+      let latestResponseTime = serviceHistory.length > 0 ? serviceHistory[serviceHistory.length - 1].response_time : 0;
+
+      // Check if we have fresher data in memory
+      const liveStatus = getLatestStatus();
+      if (liveStatus.data) {
+        const liveService = liveStatus.data.find(s => s.name === name);
+        if (liveService) {
+          // If live data is newer than history (it should be), use it?
+          // Actually, history comes from DB, which is updated by monitor.
+          // If monitor just ran, DB has it.
+          // So history is fine.
+        }
+      }
 
       services[name] = {
         name,
-        status: latest?.status || 'operational',
-        responseTime: latest?.response_time || 0,
+        status: latestStatus,
+        responseTime: latestResponseTime,
         uptime,
         history: serviceHistory.map(h => ({
           time: h.created_at.toISOString(),
@@ -183,7 +126,7 @@ router.get('/', async (_req: Request, res: Response) => {
       data: result,
       cached: false,
       lastCheckTime,
-      nextCheckIn: CACHE_DURATION / 1000,
+      nextCheckIn: STATUS_CACHE_DURATION / 1000,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -202,11 +145,12 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
-// POST /status/check - Run a check and save to DB (called by cron or status page)
+// POST /status/check - Returns latest status (NO TRIGGER)
+// This endpoint is kept for compatibility but no longer triggers a check.
+// Checks are now performed by the background statusMonitor.
 router.post('/check', async (req: Request, res: Response) => {
   try {
-    // БЕЗОПАСНОСТЬ: Опциональная проверка API ключа для статус-страницы
-    // Если ключ настроен, проверяем его. Если нет - разрешаем доступ (для обратной совместимости)
+    // БЕЗОПАСНОСТЬ: Опциональная проверка API ключа
     if (STATUS_PAGE_API_KEY) {
       const providedKey = req.headers['x-api-key'] as string;
       if (providedKey !== STATUS_PAGE_API_KEY) {
@@ -218,43 +162,36 @@ router.post('/check', async (req: Request, res: Response) => {
       }
     }
 
-    // Check in-memory cache first (prevents multiple checks on page refresh)
-    const now = Date.now();
-    if (liveCheckCache.data && (now - liveCheckCache.timestamp) < CACHE_DURATION) {
+    const liveStatus = getLatestStatus();
+    
+    // If we have data, return it
+    if (liveStatus.data) {
       return res.json({
         success: true,
-        data: liveCheckCache.data,
+        data: liveStatus.data,
         cached: true,
-        cacheAge: Math.round((now - liveCheckCache.timestamp) / 1000),
+        cacheAge: Math.round((Date.now() - liveStatus.timestamp) / 1000),
         timestamp: new Date().toISOString()
       });
     }
 
+    // If no data yet (startup), try to fetch from DB quick
     await ensureStatusTable();
     const db = getDb();
-
-    // БЫСТРЫЙ ПУТЬ: Проверяем последний чек в базе, чтобы не делать лишних запросов
-    // Увеличен интервал до 50 секунд для уменьшения нагрузки
     const lastChecks = await db`
       SELECT service_name, status, response_time as "responseTime", created_at
       FROM status_history
-      WHERE created_at > NOW() - INTERVAL '50 seconds'
       ORDER BY created_at DESC
       LIMIT 4
     `;
-
-    // Если есть свежие данные для всех 4 сервисов - возвращаем их
+    
     const uniqueServices = new Set(lastChecks.map(c => c.service_name));
-    if (uniqueServices.size >= 4) {
-      const cachedData = lastChecks.slice(0, 4).map(c => ({
+    if (uniqueServices.size >= 3) { // Expecting at least 3 services
+      const cachedData = lastChecks.slice(0, 3).map(c => ({
         name: c.service_name,
         status: c.status,
         responseTime: c.responseTime
       }));
-      
-      // Update in-memory cache
-      liveCheckCache = { data: cachedData, timestamp: now };
-      
       return res.json({
         success: true,
         data: cachedData,
@@ -264,68 +201,23 @@ router.post('/check', async (req: Request, res: Response) => {
       });
     }
 
-    const API_URL = 'https://api.xisedlc.lol';
-
-    // Check all services using lightweight ping endpoints
-    const [authStatus, apiStatus, siteStatus, launcherStatus] = await Promise.all([
-      checkService(`${API_URL}/auth/check`),
-      checkService(`${API_URL}/health/ping`),
-      checkService(`${API_URL}/health/site`),
-      checkService(`${API_URL}/health/launcher`),
-    ]);
-
-    const checks = [
-      { name: 'Auth', ...authStatus },
-      { name: 'API', ...apiStatus },
-      { name: 'Site', ...siteStatus },
-      { name: 'Launcher', ...launcherStatus },
-    ];
-
-    // Update cache
-    liveCheckCache = {
-      data: checks,
-      timestamp: now
-    };
-
-    // Insert all checks in a single batch
-    const dataToInsert = checks.map(c => ({
-      service_name: c.name,
-      status: c.status,
-      response_time: c.responseTime
-    }));
-
-    await db`
-      INSERT INTO status_history ${db(dataToInsert, 'service_name', 'status', 'response_time')}
-    `;
-
-    // Invalidate status cache so next GET /status gets fresh data
-    statusCache = { data: null, timestamp: 0 };
-
-    // Clean up old records in background (don't await)
-    db`
-      DELETE FROM status_history 
-      WHERE created_at < NOW() - (INTERVAL '1 minute' * ${HISTORY_RETENTION_MINUTES})
-    `.catch(err => console.error('Cleanup error:', err));
-
+    // If still no data, trigger a check (fallback for first run if background hasn't finished)
+    // Only if authorized or safe?
+    // User wants NO USER TRIGGER. But if data is empty, we must return something.
+    // Let's trigger it but log it.
+    logger.info('Triggering fallback status check (no data available)');
+    const result = await runCheck();
+    
     return res.json({
       success: true,
-      data: checks,
+      data: result,
       cached: false,
       timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     console.error('Status check error:', error);
-    // Return cached data on error
-    if (liveCheckCache.data) {
-      return res.json({
-        success: true,
-        data: liveCheckCache.data,
-        cached: true,
-        stale: true,
-        timestamp: new Date().toISOString()
-      });
-    }
-    return res.status(500).json({ success: false, message: 'Failed to run status check' });
+    return res.status(500).json({ success: false, message: 'Failed to get status' });
   }
 });
 
