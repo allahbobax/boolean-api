@@ -23,7 +23,21 @@ function formatLog(level: LogLevel, message: string, context?: LogContext): stri
 
 // Удаляем чувствительные данные из контекста
 function sanitizeContext(context: LogContext): LogContext {
-  const sanitized = { ...context };
+  const sanitized: LogContext = {};
+
+  for (const [key, value] of Object.entries(context)) {
+    if (value instanceof Error) {
+      sanitized[key] = {
+        message: value.message,
+        name: value.name,
+        stack: value.stack,
+        // @ts-ignore
+        code: (value as any).code
+      };
+    } else {
+      sanitized[key] = value;
+    }
+  }
   
   // Список полей, которые НЕ должны попадать в логи
   const sensitiveFields = ['token', 'password', 'secret', 'apiKey', 'authorization'];

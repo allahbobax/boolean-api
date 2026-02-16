@@ -57,9 +57,7 @@ router.get('/:provider', async (req: Request, res: Response) => {
   };
   
   // LOGGING: Отладочная информация для поиска проблемы с redirect_uri
-  // console.log(`OAuth Start [${provider}]: Generated redirectUri: "${redirectUri}"`);
-  // console.log(`OAuth Start [${provider}]: FRONTEND_URL: "${process.env.FRONTEND_URL}"`);
-  // console.log(`OAuth Start [${provider}]: Full Auth URL: "${urls[provider]}"`);
+  logger.info(`OAuth Start [${provider}]`, { redirectUri, frontendUrl: process.env.FRONTEND_URL, authUrl: urls[provider] });
 
   return res.redirect(urls[provider]);
 });
@@ -86,9 +84,11 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   const hwid = stateData.hwid as string | undefined;
 
   // LOGGING: Отладка входящего callback
-  // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-  // console.log(`OAuth Callback [${provider}]: redirectUri=${cleanApiUrl}/oauth/${provider}/callback`);
-  // console.log(`OAuth Callback [${provider}]: Decoded state:`, JSON.stringify(stateData));
+  logger.info(`OAuth Callback [${provider}]`, { 
+    codePrefix: code?.substring(0, 10), 
+    state, 
+    redirectUri: `${cleanApiUrl}/oauth/${provider}/callback`
+  });
 
   if (error || !code) {
     if (isLauncher) {
@@ -102,11 +102,14 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     const redirectUri = `${cleanApiUrl}/oauth/${provider}/callback`;
     
     // LOGGING: Отладка входящего callback
-    // console.log(`OAuth Callback [${provider}]: code=${code?.substring(0, 10)}... state=${state}`);
-    // console.log(`OAuth Callback [${provider}]: redirectUri=${redirectUri}`);
+    logger.info(`OAuth Callback [${provider}]`, { 
+      codePrefix: code?.substring(0, 10), 
+      state, 
+      redirectUri 
+    });
 
     let profile;
-    // console.log(`OAuth Callback [${provider}]: Start handling provider...`);
+    logger.info(`OAuth Callback [${provider}]`, { message: 'Start handling provider...' });
     switch (provider) {
       case 'google':
         profile = await handleGoogle(code, redirectUri);
