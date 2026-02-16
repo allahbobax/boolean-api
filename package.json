@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch api/index.ts",
+    "clean": "rimraf dist",
     "build": "tsc",
     "start": "node dist/api/index.js",
     "script:delete-users": "tsx scripts/delete-all-users.ts",
@@ -33,7 +34,8 @@
     "@types/node": "^20.12.0",
     "@types/validator": "^13.11.7",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "rimraf": "^5.0.5"
   },
   "engines": {
     "node": ">=18"
