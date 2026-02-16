@@ -48,10 +48,14 @@ export async function ensureUserSchema() {
         email_verified BOOLEAN DEFAULT false,
         settings JSONB DEFAULT '{}',
         avatar TEXT,
-        hwid VARCHAR(255)
+        hwid VARCHAR(255),
+        oauth_provider VARCHAR(50),
+        oauth_id VARCHAR(255)
       )
     `;
     await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)`;
+    await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR(255)`;
   } catch (error) {
     console.error('Ensure user schema error:', error);
   }
