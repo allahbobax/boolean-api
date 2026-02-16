@@ -91,6 +91,7 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   });
 
   if (error || !code) {
+    logger.error('OAuth Callback: Missing code or error present', { error, codePrefix: code?.substring(0, 5) });
     if (isLauncher) {
       return res.redirect(`http://127.0.0.1:3000/callback?error=${provider}_failed`);
     }

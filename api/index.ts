@@ -42,6 +42,13 @@ import friends from './routes/friends';
 import client from './routes/client';
 import status from './routes/status';
 import { startMonitoring } from './lib/statusMonitor';
+
+// MARKER: VERSION 1.1 - DEBUGGING OAUTH
+console.log('---------------------------------------------------');
+console.log('       BOOLEAN API - STARTING - VERSION 1.1        ');
+console.log('       DEBUGGING OAUTH CALLBACK ISSUES             ');
+console.log('---------------------------------------------------');
+
 const app = express();
 app.disable('x-powered-by');
 
