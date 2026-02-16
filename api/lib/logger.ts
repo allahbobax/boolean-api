@@ -34,6 +34,12 @@ function sanitizeContext(context: LogContext): LogContext {
         // @ts-ignore
         code: (value as any).code
       };
+    } else if (value && typeof value === 'object' && ('message' in value || 'stack' in value)) {
+        sanitized[key] = {
+            message: (value as any).message,
+            stack: (value as any).stack,
+            code: (value as any).code
+        };
     } else {
       sanitized[key] = value;
     }
