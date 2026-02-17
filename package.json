@@ -1,12 +1,10 @@
 {
-  "name": "boolean-api-vercel",
+  "name": "boolean-api",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "tsx watch api/index.ts",
-    "clean": "rimraf dist",
     "build": "tsc",
-    "prestart": "npm run clean && npm run build",
     "start": "node dist/api/index.js",
     "script:delete-users": "tsx scripts/delete-all-users.ts",
     "script:delete-keys": "tsx scripts/delete-all-keys.ts",
@@ -38,7 +36,6 @@
     "@types/node": "^20.12.0",
     "@types/transliteration": "^1.6.1",
     "@types/validator": "^13.11.7",
-    "rimraf": "^5.0.5",
     "tsx": "^4.7.0",
     "typescript": "^5.4.5"
   },

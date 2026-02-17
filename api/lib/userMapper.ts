@@ -16,7 +16,9 @@ export function mapUserFromDb(dbUser: User): MappedUser {
     isAdmin: dbUser.is_admin,
     isBanned: dbUser.is_banned,
     emailVerified: dbUser.email_verified,
-    settings: dbUser.settings ? JSON.parse(dbUser.settings) : undefined,
+    settings: typeof dbUser.settings === 'string' 
+      ? JSON.parse(dbUser.settings) 
+      : (dbUser.settings || undefined),
     hwid: dbUser.hwid || null,
     usernameChangeCount: dbUser.username_change_count || 0,
     lastUsernameChange: dbUser.last_username_change || null

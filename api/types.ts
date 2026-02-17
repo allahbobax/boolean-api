@@ -9,7 +9,7 @@ export interface User {
   is_admin: boolean;
   is_banned: boolean;
   email_verified: boolean;
-  settings?: string | null;
+  settings?: any;
   hwid?: string | null;
   oauth_provider?: string | null;
   oauth_id?: string | null;
