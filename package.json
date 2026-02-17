@@ -6,6 +6,7 @@
     "dev": "tsx watch api/index.ts",
     "clean": "rimraf dist",
     "build": "tsc",
+    "prestart": "npm run clean && npm run build",
     "start": "node dist/api/index.js",
     "script:delete-users": "tsx scripts/delete-all-users.ts",
     "script:delete-keys": "tsx scripts/delete-all-keys.ts",
@@ -23,6 +24,7 @@
     "helmet": "^8.1.0",
     "jose": "^5.2.0",
     "postgres": "^3.4.4",
+    "transliteration": "^2.6.1",
     "validator": "^13.11.0"
   },
   "devDependencies": {
@@ -32,10 +34,11 @@
     "@types/csurf": "^1.11.5",
     "@types/express": "^4.17.21",
     "@types/node": "^20.12.0",
+    "@types/transliteration": "^1.6.1",
     "@types/validator": "^13.11.7",
+    "rimraf": "^5.0.5",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.5",
-    "rimraf": "^5.0.5"
+    "typescript": "^5.4.5"
   },
   "engines": {
     "node": ">=18"
