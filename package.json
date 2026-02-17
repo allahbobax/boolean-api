@@ -11,7 +11,9 @@
     "script:delete-users": "tsx scripts/delete-all-users.ts",
     "script:delete-keys": "tsx scripts/delete-all-keys.ts",
     "script:clear-rate-limits": "tsx scripts/clear-rate-limits.ts",
-    "script:clear-account-locks": "tsx scripts/clear-account-locks.ts"
+    "script:clear-account-locks": "tsx scripts/clear-account-locks.ts",
+    "script:check-db-size": "tsx scripts/check-db-size.ts",
+    "script:test-db-connection": "tsx scripts/test-db-connection.ts"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.7",

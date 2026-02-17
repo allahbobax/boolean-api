@@ -142,7 +142,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       `;
       
       if (currentUserResult.length === 0) {
-        return res.status(404).json({ success: false, message: '404' });
+        return res.status(404).json({ success: false, message: 'User not found' });
       }
       
       const currentUser = currentUserResult[0];
@@ -171,9 +171,21 @@ router.patch('/:id', async (req: Request, res: Response) => {
         WHERE id = ${id}
       `;
     }
+    
+    // Формируем динамический запрос обновления
+    const updateData: Record<string, any> = {};
     for (const [key, value] of Object.entries(safeUpdates)) {
-      const dbField = ALLOWED_UPDATE_FIELDS[key];
-      await sql`UPDATE users SET ${sql(dbField)} = ${value} WHERE id = ${id}`;
+        const dbField = ALLOWED_UPDATE_FIELDS[key];
+        updateData[dbField] = value;
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+      await sql`
+        UPDATE users SET ${
+          sql(updateData)
+        }
+        WHERE id = ${id}
+      `;
     }
 
     const result = await sql<User[]>`
@@ -185,16 +197,21 @@ router.patch('/:id', async (req: Request, res: Response) => {
     if (result.length === 0) {
       return res.status(404).json({ 
         success: false, 
-        message: '404' 
+        message: 'User not found after update' 
       });
     }
 
     return res.json({ success: true, data: mapUserFromDb(result[0]) });
-  } catch (error) {
-    console.error('Update user error:', error);
+  } catch (error: any) {
+    console.error('Update user error details:', {
+      message: error.message,
+      stack: error.stack,
+      id,
+      updates: safeUpdates
+    });
     return res.status(500).json({ 
       success: false, 
-      message: 'Our problem, please try again later' 
+      message: 'Server error: ' + error.message 
     });
   }
 });
